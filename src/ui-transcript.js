@@ -4,7 +4,7 @@
  * 不負責：重算數據（交給流程控制）、儲存
  */
 
-import { el, renderMetrics, saveBlob, formatSeconds } from './ui-common.js';
+import { el, saveBlob, formatSeconds } from './ui-common.js';
 
 const EXT_BY_TYPE = {
   'audio/webm': 'webm',
@@ -38,14 +38,26 @@ export function exportRoundAudio(round, context = {}, save = saveBlob) {
  *   options.onExportAudio(round) 自己接手取出音檔；不給就用預設下載
  */
 export function renderRoundCard(round, options = {}) {
-  const { delta = null, editable = true, context = {}, onEdit, onExportAudio } = options;
+  const { editable = true, context = {}, onEdit, onExportAudio, onRedo } = options;
 
   const card = el('article', 'card round-card');
   card.dataset.round = String(round.index);
 
   const head = el('div', 'card-head');
   head.appendChild(el('h3', 'card-title', `第 ${round.index} 遍`));
-  head.appendChild(el('span', 'history-date', formatSeconds(round.seconds)));
+
+  const right = el('div', 'card-head-right');
+  right.appendChild(el('span', 'history-date', formatSeconds(round.seconds)));
+  // 講到一半腦袋卡住是這種練習的常態，重錄要伸手就按得到
+  if (onRedo) {
+    const redo = el('button', 'btn-text btn-redo', '重錄');
+    redo.type = 'button';
+    redo.dataset.role = 'redo';
+    redo.dataset.round = String(round.index);
+    redo.addEventListener('click', () => onRedo(round.index));
+    right.appendChild(redo);
+  }
+  head.appendChild(right);
   card.appendChild(head);
 
   // 斷網那遍逐字稿是空的，這是預期行為，由使用者事後補字
@@ -68,7 +80,7 @@ export function renderRoundCard(round, options = {}) {
   }
   card.appendChild(box);
 
-  card.appendChild(renderMetrics(round.metrics, delta));
+  // 數據不放在這裡。三遍要能上下對齊比較，統一收進第 3 遍後面的對比表。
 
   if (round.audio) {
     const btn = el('button', 'btn-text', '取出這一遍的錄音');

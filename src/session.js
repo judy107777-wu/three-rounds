@@ -15,6 +15,19 @@ import {
 
 export const ROUNDS_PER_PRACTICE = 3;
 
+/** 依第幾遍排序，讓重錄之後順序不會亂掉 */
+function sortRounds(rounds) {
+  return [...rounds].sort((a, b) => a.index - b.index);
+}
+
+/** 還沒講的最小編號。全部講完回傳 null */
+function nextMissingIndex(rounds) {
+  for (let i = 1; i <= ROUNDS_PER_PRACTICE; i += 1) {
+    if (!rounds.some((r) => r.index === i)) return i;
+  }
+  return null;
+}
+
 function buildRound(index, result) {
   const seconds = Math.max(0, Math.round(Number(result.seconds) || 0));
   const transcript = (result.transcript || '').trim();
@@ -56,14 +69,16 @@ export function createSession(practice) {
     get completedRounds() {
       return current.rounds.length;
     },
-    /** 現在該講第幾遍；三遍都講完時回傳 null */
+    /**
+     * 現在該講第幾遍；三遍都講完時回傳 null。
+     * 用「還缺哪一遍」而不是「已經有幾遍」，重錄中間某一遍時才回得去。
+     */
     get currentRoundNumber() {
-      const n = current.rounds.length + 1;
-      return n > ROUNDS_PER_PRACTICE ? null : n;
+      return nextMissingIndex(current.rounds);
     },
     /** 三遍是否都講完了 */
     get isComplete() {
-      return current.rounds.length >= ROUNDS_PER_PRACTICE;
+      return nextMissingIndex(current.rounds) === null;
     },
     /** 是否該出現標題輸入：三遍講完、而且還沒存檔 */
     get needsTitle() {
@@ -73,12 +88,25 @@ export function createSession(practice) {
       return current.status === 'done';
     },
 
-    /** 記下這一遍的結果 */
+    /** 記下這一遍的結果。補的是目前還缺的那一遍 */
     async completeRound(result) {
-      if (api.isComplete) return current;
-      const index = current.rounds.length + 1;
-      const rounds = [...current.rounds, buildRound(index, result)];
+      const index = nextMissingIndex(current.rounds);
+      if (index === null) return current;
+      const rounds = sortRounds([...current.rounds, buildRound(index, result)]);
       return persist({ rounds });
+    },
+
+    /**
+     * 重錄某一遍：把那一遍丟掉，回到待錄狀態。
+     * 其他遍不動，差距會自動重算（差距是即時從數據算出來的，沒有存下來）。
+     *
+     * 已經存檔的練習重錄後回到未完成，這樣中途離開還接得回來；
+     * 標題保留，不用重打。
+     */
+    async redoRound(index) {
+      if (!current.rounds.some((r) => r.index === index)) return current;
+      const rounds = current.rounds.filter((r) => r.index !== index);
+      return persist({ rounds, status: 'unfinished' });
     },
 
     /** 逐字稿被編輯或補字之後，數據要跟著重算 */
@@ -116,7 +144,7 @@ export function createSession(practice) {
       return persist({ title: clean, status: 'done' });
     },
 
-    /** AI 檢查結果跟著這次練習一起存 */
+    /** AI 分析結果跟著這次練習一起存 */
     async attachReview(review) {
       return persist({ review });
     },

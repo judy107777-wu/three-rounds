@@ -7,20 +7,76 @@
  * 開始練習前不要求輸入任何文字。
  */
 
-import { el, formatSeconds, showToast } from './ui-common.js';
+import { el, formatSeconds, showToast, renderMetricsTable } from './ui-common.js';
 import { renderRoundCard } from './ui-transcript.js';
 import { ROUNDS_PER_PRACTICE } from './session.js';
 import { renderReview } from './ui-review.js';
+
+const NOTE_STORAGE = 'stt.quick-note';
+
+/**
+ * 開講前的重點整理。
+ * 這是筆記，不是紀錄——不進資料庫、不進匯出、不進搜尋、不送給 AI。
+ * 只放在瀏覽器的本機儲存，存檔之後就清掉。
+ * 留在本機而不是純記憶體，是為了中途不小心關掉還找得回來。
+ */
+export function getNote() {
+  try {
+    return globalThis.localStorage?.getItem(NOTE_STORAGE) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function setNote(text) {
+  try {
+    if (text) globalThis.localStorage?.setItem(NOTE_STORAGE, text);
+    else globalThis.localStorage?.removeItem(NOTE_STORAGE);
+  } catch {
+    // 存不進去就算了，筆記本來就不保證留著
+  }
+}
+
+export function clearNote() {
+  setNote('');
+}
+
+/** 重點整理的框。選填，不填也能直接開始講。 */
+function noteBox() {
+  const card = el('section', 'card note-card');
+  card.id = 'note-card';
+
+  const head = el('div', 'card-head');
+  head.appendChild(el('h2', 'card-title', '重點整理'));
+  const clear = el('button', 'btn-text', '清空');
+  clear.type = 'button';
+  clear.id = 'note-clear';
+  head.appendChild(clear);
+  card.appendChild(head);
+
+  const box = el('textarea', 'transcript note-input');
+  box.id = 'quick-notes';
+  box.rows = 5;
+  box.placeholder = '想先寫幾點再講就寫在這裡。選填，不會存進紀錄。';
+  box.value = getNote();
+  box.addEventListener('input', () => setNote(box.value));
+  clear.addEventListener('click', () => {
+    box.value = '';
+    setNote('');
+  });
+  card.appendChild(box);
+  return card;
+}
 
 function roundStack(session, handlers, context) {
   const stack = el('div', 'round-stack');
   for (const round of session.rounds) {
     stack.appendChild(
       renderRoundCard(round, {
-        delta: session.deltaFor(round.index),
         context,
         onEdit: handlers.onEditTranscript,
         onExportAudio: handlers.onExportAudio,
+        onRedo: handlers.onRedoRound,
       }),
     );
   }
@@ -87,16 +143,18 @@ function titleForm(session, handlers) {
 function reviewArea(session, state, handlers) {
   const card = el('section', 'card');
   card.id = 'review-area';
+  card.appendChild(el('h2', 'card-title', 'AI 分析'));
 
-  if (session.practice.review) {
-    card.appendChild(el('h2', 'card-title', 'AI 檢查'));
+  const done = !!session.practice.review;
+  if (done) {
     card.appendChild(renderReview(session.practice.review));
-    return card;
+  } else {
+    card.appendChild(el('p', 'hint', '把三遍逐字稿送給 AI，看看有沒有刪掉不該刪的。'));
   }
 
-  card.appendChild(el('h2', 'card-title', 'AI 檢查'));
-  card.appendChild(el('p', 'hint', '把三遍逐字稿送給 AI，看看有沒有刪掉不該刪的。'));
-  const btn = el('button', 'btn', state.reviewing ? '檢查中…' : '做 AI 檢查');
+  // 做過也還能再做一次：失敗過、或重錄之後內容變了都用得到
+  const label = state.reviewing ? '分析中…' : done ? '重新分析' : '做 AI 分析';
+  const btn = el('button', 'btn', label);
   btn.type = 'button';
   btn.id = 'review-btn';
   btn.disabled = !!state.reviewing;
@@ -124,6 +182,8 @@ export function renderToday(container, state, handlers = {}) {
 
   const context = { date: session.practice.date, title: session.practice.title };
 
+  if (!session.isSaved) container.appendChild(noteBox());
+
   const head = el('div', 'card-head');
   head.appendChild(el('span', 'history-date', session.practice.date));
   const progress = session.isComplete
@@ -140,6 +200,7 @@ export function renderToday(container, state, handlers = {}) {
 
   if (session.rounds.length) {
     container.appendChild(roundStack(session, handlers, context));
+    container.appendChild(renderMetricsTable(session.rounds));
   }
 
   if (!session.isComplete) {

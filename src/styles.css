@@ -241,6 +241,9 @@ body {
 /* ── 逐字稿 ───────────────────────────────── */
 
 .transcript {
+  /* 沒有這一行的話 textarea 會用瀏覽器預設寬度，一行只放得下 11 個字 */
+  width: 100%;
+  display: block;
   font-size: 16px;
   line-height: var(--line-height-read);
   color: var(--text);
@@ -360,7 +363,7 @@ body {
   display: none;
 }
 
-/* ── AI 檢查結果 ──────────────────────────── */
+/* ── AI 分析結果 ──────────────────────────── */
 
 .review-section {
   margin-bottom: var(--gap-lg);
@@ -393,4 +396,92 @@ body {
 .metric-label,
 .metric-unit {
   color: var(--text-sub);
+}
+
+/* ── 三遍對比表 ───────────────────────────── */
+
+.metrics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.metrics-table th,
+.metrics-table td {
+  padding: 8px 4px;
+  text-align: right;
+  border-bottom: 1px solid var(--secondary);
+  vertical-align: baseline;
+}
+
+.metrics-table thead th {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+
+.metrics-table tbody tr:last-child th,
+.metrics-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.metrics-table-label {
+  text-align: left;
+  font-weight: 400;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+
+/* 三遍的數字要上下對齊才比得出來 */
+.metrics-table td .metric-value {
+  font-size: 15px;
+}
+
+.metrics-table td .delta {
+  display: block;
+  font-size: 12px;
+}
+
+/* ── 重點整理（筆記） ─────────────────────── */
+
+.note-card {
+  border-style: dashed;
+}
+
+.note-input {
+  width: 100%;
+  resize: vertical;
+}
+
+.btn-redo {
+  font-size: 14px;
+}
+
+.card-head-right {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* ── 窄螢幕：把邊界縮小，讓逐字稿一行放得下 18 個字 ── */
+
+@media (max-width: 430px) {
+  .app-main {
+    padding: 14px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .transcript {
+    padding: 4px;
+  }
+
+  .metrics-table th,
+  .metrics-table td {
+    padding: 8px 2px;
+  }
 }

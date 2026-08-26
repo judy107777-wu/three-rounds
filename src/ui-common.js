@@ -4,7 +4,7 @@
  * 不負責：任何運算與資料存取邏輯
  */
 
-import { toneOf } from './compare.js';
+import { toneOf, compareMetrics } from './compare.js';
 
 export function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -66,6 +66,62 @@ export function renderMetrics(metrics, delta) {
     row.appendChild(item);
   }
   return row;
+}
+
+/**
+ * 三遍數據的對比表。
+ * 放在第 3 遍與 AI 分析之間，不放在每一遍下方——
+ * 三遍要能上下對齊比較，散在各張卡片下緣看不出變化。
+ * @param {Array} rounds 已完成的幾遍
+ */
+export function renderMetricsTable(rounds = []) {
+  const wrap = el('div', 'card metrics-table-card');
+  wrap.dataset.role = 'metrics-table';
+  if (!rounds.length) return wrap;
+
+  wrap.appendChild(el('h3', 'card-title', '三遍對比'));
+
+  const table = el('table', 'metrics-table');
+  const thead = el('thead');
+  const headRow = el('tr');
+  headRow.appendChild(el('th', null, ''));
+  for (const round of rounds) headRow.appendChild(el('th', null, `第 ${round.index} 遍`));
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = el('tbody');
+  for (const field of METRIC_FIELDS) {
+    const row = el('tr');
+    row.dataset.field = field.key;
+    row.appendChild(el('th', 'metrics-table-label', field.label));
+    for (let i = 0; i < rounds.length; i += 1) {
+      const metrics = rounds[i].metrics || {};
+      const cell = el('td');
+      const value =
+        field.key === 'seconds' ? formatSeconds(metrics.seconds) : `${metrics[field.key] ?? 0}`;
+      cell.appendChild(el('span', 'metric-value', value));
+      if (field.key !== 'seconds') cell.appendChild(el('span', 'metric-unit', field.unit));
+
+      // 與前一遍比。秒數與字數只描述變化，贅詞才分進步退步。
+      const prev = rounds[i - 1];
+      if (prev) {
+        const diff = compareMetrics(metrics, prev.metrics)[field.key];
+        const tone = toneOf(diff.direction);
+        // 秒數那一列的值是 1:35 這種格式，差距要補上單位才看得懂是幾秒；
+        // 其他列的單位就寫在數字旁邊，不用重複
+        const deltaUnit = field.key === 'seconds' ? '秒' : '';
+        const mark = el('span', `delta tone-${tone}`, formatDelta(diff, deltaUnit));
+        mark.dataset.tone = tone;
+        mark.dataset.field = field.key;
+        cell.appendChild(mark);
+      }
+      row.appendChild(cell);
+    }
+    tbody.appendChild(row);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  return wrap;
 }
 
 /** 把資料交給使用者下載 */

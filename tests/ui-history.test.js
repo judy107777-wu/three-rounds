@@ -121,21 +121,20 @@ describe('T15 歷史紀錄與搜尋', () => {
     expect(cards).toHaveLength(3);
     expect(cards[0].querySelector('textarea').value).toBe(ROUND1);
     expect(cards[2].querySelector('textarea').value).toBe(ROUND3);
-    for (const card of cards) {
-      expect(card.querySelector('.metrics').textContent).toContain('贅詞密度');
-    }
+    expect(box.querySelector('[data-role="metrics-table"]').textContent).toContain('贅詞密度');
     expect(box.querySelector('#detail-rounds').className).toContain('round-stack');
     expect(box.textContent).toContain('專注力那篇文章');
   });
 
-  it('第 2、3 遍顯示與前一遍的差距', async () => {
+  it('第 2、3 遍在對比表裡顯示與前一遍的差距', async () => {
     await seed('a', '主題', NOW, [roundOf(1, ROUND1, 180), roundOf(2, ROUND2, 130), roundOf(3, ROUND3, 95)]);
     const box = mount();
     renderDetail(box, await getPractice('a', { now: NOW }));
-    const cards = box.querySelectorAll('.round-card');
-    expect(cards[0].querySelector('.delta')).toBeNull();
-    expect(cards[1].querySelectorAll('.delta').length).toBe(5);
-    expect(cards[2].querySelectorAll('.delta').length).toBe(5);
+    const row = box.querySelector('.metrics-table tbody tr[data-field="charCount"]');
+    const cells = row.querySelectorAll('td');
+    expect(cells[0].querySelector('.delta')).toBeNull();
+    expect(cells[1].querySelector('.delta')).not.toBeNull();
+    expect(cells[2].querySelector('.delta')).not.toBeNull();
   });
 
   it('未完成的練習也列得出來，並標示未完成', async () => {
@@ -185,7 +184,7 @@ describe('T15 歷史紀錄與搜尋', () => {
     expect(box.querySelector('[data-role="export-audio"]')).toBeNull();
     // 逐字稿與數據照常顯示
     expect(box.querySelector('textarea').value).toBe('沒有音檔的一遍');
-    expect(box.querySelector('.metrics').textContent).toContain('贅詞密度');
+    expect(box.querySelector('[data-role="metrics-table"]').textContent).toContain('贅詞密度');
   });
 
   it('回到歷史紀錄的按鈕會把動作交出去', async () => {
@@ -195,6 +194,71 @@ describe('T15 歷史紀錄與搜尋', () => {
     renderDetail(box, await getPractice('a', { now: NOW }), { onBack });
     box.querySelector('#detail-back').click();
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('沒分析過的舊紀錄，可以從歷史紀錄補做分析', async () => {
+    await seed('a', '主題', NOW, [roundOf(1, ROUND1, 180)]);
+    const onReview = vi.fn();
+    const box = mount();
+    renderDetail(box, await getPractice('a', { now: NOW }), { onReview });
+
+    const btn = box.querySelector('#detail-review-btn');
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toBe('做 AI 分析');
+    btn.click();
+    expect(onReview).toHaveBeenCalledWith('a');
+  });
+
+  it('分析過的紀錄按鈕變成重新分析，舊結果仍看得到', async () => {
+    const p = createPractice({ now: NOW });
+    p.id = 'r';
+    p.title = '主題';
+    p.status = 'done';
+    p.rounds = [roundOf(1, ROUND1, 180)];
+    p.review = {
+      rescue: [{ point: '舊的分析內容', reason: '理由' }],
+      cut: [],
+      newContent: [],
+      conclusion: { isFirstSentence: true, note: '' },
+    };
+    await savePractice(p);
+
+    const box = mount();
+    renderDetail(box, await getPractice('r', { now: NOW }), { onReview: vi.fn() });
+    expect(box.querySelector('#detail-review-btn').textContent).toBe('重新分析');
+    expect(box.textContent).toContain('舊的分析內容');
+  });
+
+  it('分析中按鈕停用，失敗時顯示原因', async () => {
+    await seed('a', '主題', NOW, [roundOf(1, ROUND1, 180)]);
+    const practice = await getPractice('a', { now: NOW });
+
+    const box = mount();
+    renderDetail(box, practice, { onReview: vi.fn() }, { reviewing: true });
+    expect(box.querySelector('#detail-review-btn').disabled).toBe(true);
+    expect(box.querySelector('#detail-review-btn').textContent).toBe('分析中…');
+
+    document.body.replaceChildren();
+    const box2 = mount();
+    renderDetail(box2, practice, { onReview: vi.fn() }, { reviewError: '連不上 Gemini，稍後再試。' });
+    expect(box2.querySelector('#detail-review-error').textContent).toContain('稍後再試');
+  });
+
+  it('詳細頁的數據放在對比表，不放在每一遍下方', async () => {
+    await seed('a', '主題', NOW, [roundOf(1, ROUND1, 180), roundOf(2, ROUND2, 130), roundOf(3, ROUND3, 95)]);
+    const box = mount();
+    renderDetail(box, await getPractice('a', { now: NOW }));
+
+    for (const card of box.querySelectorAll('.round-card')) {
+      expect(card.querySelector('.metrics')).toBeNull();
+    }
+    const table = box.querySelector('[data-role="metrics-table"]');
+    expect(table).not.toBeNull();
+    expect(table.querySelectorAll('thead th')).toHaveLength(4);
+    // 對比表排在 AI 分析前面
+    const kids = [...box.children];
+    expect(kids.findIndex((k) => k.dataset.role === 'metrics-table'))
+      .toBeLessThan(kids.findIndex((k) => k.id === 'detail-review'));
   });
 
   it('找不到那筆時不當掉', () => {

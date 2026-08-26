@@ -1,5 +1,5 @@
 /**
- * AI 檢查結果畫面
+ * AI 分析結果畫面
  * 負責：把四項分析顯示出來
  * 不負責：呼叫 Gemini、決定何時呼叫、存檔
  *
@@ -37,7 +37,7 @@ function listSection(key, title, items, renderItem) {
 export function renderReview(review) {
   const wrap = el('div', 'review');
   if (!review) {
-    wrap.appendChild(el('p', 'empty', '這次練習還沒做 AI 檢查。'));
+    wrap.appendChild(el('p', 'empty', '這次練習還沒做 AI 分析。'));
     return wrap;
   }
 

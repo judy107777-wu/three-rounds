@@ -12,6 +12,35 @@
 
 export const RECOGNITION_LANG = 'zh-TW';
 
+/** 判定重疊時至少要這麼多字才算數，太短會把正常的重複用字誤刪 */
+const MIN_OVERLAP = 3;
+
+/**
+ * 把新的一段文字併進已經有的內容，自動去掉重疊的部分。
+ *
+ * Android Chrome 產生重複的方式有三種，這一個函式全部擋掉：
+ * 1. 同一句用新的編號重複送，而且每次更長（「我今天」→「我今天想講」）
+ * 2. 自動重啟之後，把剛剛那段話再送一次
+ * 3. 前後兩段在交界處重疊幾個字
+ *
+ * 靠編號判斷擋不住第 1、2 種，所以改成直接比對文字。
+ */
+export function mergeTranscript(base, addition) {
+  const a = base || '';
+  const b = (addition || '').trim();
+  if (!b) return a;
+  if (!a) return b;
+  if (a.includes(b)) return a; // 這段已經在裡面了
+  if (b.startsWith(a)) return b; // 整句重送而且變長，用新的蓋掉舊的
+
+  // a 的結尾和 b 的開頭有多長的重疊，就從 b 砍掉多長
+  const max = Math.min(a.length, b.length);
+  for (let len = max; len >= MIN_OVERLAP; len -= 1) {
+    if (a.endsWith(b.slice(0, len))) return a + b.slice(len);
+  }
+  return a + b;
+}
+
 /** 出這些錯就不要再自動重啟，重啟只會變成無窮迴圈 */
 const FATAL_ERRORS = new Set([
   'not-allowed',
@@ -80,16 +109,18 @@ export function createRecognizer(options = {}) {
   }
 
   function segmentText() {
-    return finals.join('');
+    // 用合併而不是直接串接，Android 會把整句用新的編號重複送
+    return finals.reduce((acc, text) => mergeTranscript(acc, text), '');
   }
 
   function currentText() {
-    return (committed + segmentText() + interim).trim();
+    return mergeTranscript(mergeTranscript(committed, segmentText()), interim).trim();
   }
 
   /** 把這一段的結果收進 committed，準備開下一段 */
   function flushSegment() {
-    committed += segmentText();
+    // 自動重啟之後常常會把剛剛那段再送一次，所以這裡也要合併
+    committed = mergeTranscript(committed, segmentText());
     finals = [];
     interim = '';
   }

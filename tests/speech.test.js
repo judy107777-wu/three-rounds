@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createRecognizer, fallbackNotice, RECOGNITION_LANG } from '../src/speech.js';
+import { createRecognizer, fallbackNotice, mergeTranscript, RECOGNITION_LANG } from '../src/speech.js';
 
 /**
  * 假的 SpeechRecognition。
@@ -53,6 +53,46 @@ function makeFakeCtor(store) {
     }
   };
 }
+
+describe('合併逐字稿：把重複的部分去掉', () => {
+  it('整句重送而且變長，用新的蓋掉舊的', () => {
+    expect(mergeTranscript('我今天', '我今天想講一篇文章')).toBe('我今天想講一篇文章');
+  });
+
+  it('已經含在裡面的段落不會再加一次', () => {
+    expect(mergeTranscript('我今天想講一篇文章', '想講一篇')).toBe('我今天想講一篇文章');
+  });
+
+  it('前後交界處重疊的字只留一份', () => {
+    expect(mergeTranscript('他做了一個三十天的實驗', '三十天的實驗把手機放到另一個房間'))
+      .toBe('他做了一個三十天的實驗把手機放到另一個房間');
+  });
+
+  it('完全不重疊就直接接上去', () => {
+    expect(mergeTranscript('第一句', '第二句')).toBe('第一句第二句');
+  });
+
+  it('空值不會弄壞內容', () => {
+    expect(mergeTranscript('已經有的', '')).toBe('已經有的');
+    expect(mergeTranscript('', '新的')).toBe('新的');
+    expect(mergeTranscript('', '')).toBe('');
+    expect(mergeTranscript(null, undefined)).toBe('');
+  });
+
+  it('實機那段層層累積的內容會被收斂成一句', () => {
+    // 使用者 2026-08-27 實機回報的形狀：每一段都是前一段再加上更多字
+    const chunks = [
+      '請你36位能夠讓兩個人',
+      '請你36位能夠讓兩個人彼此',
+      '請你36位能夠讓兩個人彼此從陌生到熟悉',
+      '請你36位能夠讓兩個人彼此從陌生到熟悉再雙方的',
+    ];
+    const merged = chunks.reduce((acc, c) => mergeTranscript(acc, c), '');
+    expect(merged).toBe('請你36位能夠讓兩個人彼此從陌生到熟悉再雙方的');
+    // 「請你36位」只能出現一次
+    expect(merged.split('請你36位').length - 1).toBe(1);
+  });
+});
 
 describe('T08 語音辨識模組', () => {
   it('辨識語言固定為台灣中文', () => {
@@ -120,6 +160,31 @@ describe('T08 語音辨識模組', () => {
     store.instance.emitFinal('作者是一個工程師');
     const result = await r.stop();
     expect(result.transcript).toBe('我今天想講一篇文章作者是一個工程師');
+  });
+
+  it('自動重啟之後把剛剛那段再送一次，不會變成重複的字', async () => {
+    const store = {};
+    const r = createRecognizer({ SpeechRecognition: makeFakeCtor(store) });
+    r.start();
+    store.instance.emitFinal('他做了一個三十天的實驗');
+    store.instance.endByItself();
+    // Android 重啟後常常把同一段話再送一次，而且接著往下講
+    store.instance.emitFinal('他做了一個三十天的實驗把手機放到另一個房間');
+    const result = await r.stop();
+    expect(result.transcript).toBe('他做了一個三十天的實驗把手機放到另一個房間');
+  });
+
+  it('同一段辨識裡用新的編號層層累積，也不會重複', async () => {
+    const store = {};
+    const r = createRecognizer({ SpeechRecognition: makeFakeCtor(store) });
+    r.start();
+    store.instance.emit([
+      { text: '請你36位能夠讓兩個人' },
+      { text: '請你36位能夠讓兩個人彼此' },
+      { text: '請你36位能夠讓兩個人彼此從陌生到熟悉' },
+    ]);
+    const result = await r.stop();
+    expect(result.transcript).toBe('請你36位能夠讓兩個人彼此從陌生到熟悉');
   });
 
   it('連續自己結束多次，內容一路累積不掉字', async () => {

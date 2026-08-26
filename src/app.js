@@ -6,7 +6,7 @@
 
 import { loadSession, createSession } from './session.js';
 import { createRecognizer } from './speech.js';
-import { renderToday } from './ui-today.js';
+import { renderToday, clearNote } from './ui-today.js';
 import { renderHistory, renderDetail } from './ui-history.js';
 import { renderSettings, getApiKey } from './ui-settings.js';
 import { renderReview } from './ui-review.js';
@@ -42,6 +42,8 @@ const state = {
   reviewError: '',
   keyword: '',
   detailId: null,
+  detailReviewing: false,
+  detailReviewError: '',
 };
 
 let recognizer = null;
@@ -70,7 +72,7 @@ function drawToday() {
 const todayHandlers = {
   // 第一版不錄音。Android 上麥克風只給一個來源用，
   // 同時開錄音會讓辨識完全收不到聲音（實測 onnomatch、逐字稿全空）。
-  // 逐字稿是數據與 AI 檢查的根，所以優先讓給辨識。
+  // 逐字稿是數據與 AI 分析的根，所以優先讓給辨識。
   async onStart() {
     state.notice = '';
     state.liveText = '';
@@ -134,11 +136,21 @@ const todayHandlers = {
   async onFinish(title) {
     try {
       await state.session.finish(title);
+      // 筆記只是講之前的草稿，存檔就沒有用了
+      clearNote();
       showToast('已存檔');
     } catch (err) {
       showToast(err.message);
       return;
     }
+    drawToday();
+  },
+
+  async onRedoRound(index) {
+    const ok = globalThis.confirm?.(`第 ${index} 遍會重講，原本的內容不留。要重錄嗎？`);
+    if (!ok) return;
+    await state.session.redoRound(index);
+    state.reviewError = '';
     drawToday();
   },
 
@@ -199,7 +211,10 @@ const historyHandlers = {
 
 async function drawDetail() {
   const practice = await getPractice(state.detailId);
-  renderDetail(views.detail, practice, detailHandlers);
+  renderDetail(views.detail, practice, detailHandlers, {
+    reviewing: state.detailReviewing,
+    reviewError: state.detailReviewError,
+  });
 }
 
 const detailHandlers = {
@@ -227,6 +242,29 @@ const detailHandlers = {
     await drawDetail();
     showToast(pinned ? '已釘選，音檔會留著' : '已取消釘選');
   },
+  // 當下沒分析就離開的話，從歷史紀錄補做；做過的也能重跑
+  async onReview(id) {
+    const practice = await getPractice(id);
+    if (!practice) return;
+    state.detailReviewing = true;
+    state.detailReviewError = '';
+    await drawDetail();
+
+    const result = await requestReview({ rounds: practice.rounds, apiKey: getApiKey() });
+    state.detailReviewing = false;
+    if (!result.ok) {
+      state.detailReviewError = result.message;
+      await drawDetail();
+      return;
+    }
+    await createSession(practice).attachReview(result.review);
+    if (state.session && state.session.practice.id === id) {
+      state.session = createSession(await getPractice(id));
+    }
+    await drawDetail();
+    showToast('分析完成');
+  },
+
   async onDelete(id) {
     const ok = globalThis.confirm?.('刪除之後救不回來，確定要刪除這筆練習嗎？');
     if (!ok) return;

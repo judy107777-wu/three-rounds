@@ -173,6 +173,79 @@ describe('T09 三遍流程控制', () => {
     expect(await listPractices({ now: NOW })).toHaveLength(0);
   });
 
+  it('重錄第 2 遍：回到第 2 遍待開始，第 1 遍不動', async () => {
+    const s = await loadSession({ now: NOW });
+    await s.completeRound(spoken(ROUND1, 180));
+    await s.completeRound(spoken(ROUND2, 130));
+    await s.redoRound(2);
+
+    expect(s.rounds).toHaveLength(1);
+    expect(s.rounds[0].index).toBe(1);
+    expect(s.rounds[0].transcript).toBe(ROUND1);
+    expect(s.currentRoundNumber).toBe(2);
+    expect(s.isComplete).toBe(false);
+  });
+
+  it('重錄完之後接回原本的位置，順序不會亂', async () => {
+    const s = await loadSession({ now: NOW });
+    await s.completeRound(spoken(ROUND1, 180));
+    await s.completeRound(spoken(ROUND2, 130));
+    await s.completeRound(spoken(ROUND3, 95));
+    await s.redoRound(2);
+    await s.completeRound(spoken('重講的第二遍內容', 100));
+
+    expect(s.rounds.map((r) => r.index)).toEqual([1, 2, 3]);
+    expect(s.rounds[1].transcript).toBe('重講的第二遍內容');
+    expect(s.rounds[0].transcript).toBe(ROUND1);
+    expect(s.rounds[2].transcript).toBe(ROUND3);
+    expect(s.isComplete).toBe(true);
+  });
+
+  it('重錄之後差距跟著重算', async () => {
+    const s = await loadSession({ now: NOW });
+    await s.completeRound(spoken('然後就是那個這個其實老實說基本上', 60));
+    await s.completeRound(spoken('然後就是那個這個', 60));
+    const before = s.deltaFor(2).fillerCount.delta;
+
+    await s.redoRound(2);
+    await s.completeRound(spoken('今天講的是專注力', 60));
+    const after = s.deltaFor(2).fillerCount.delta;
+    expect(after).not.toBe(before);
+    expect(s.deltaFor(2).fillerCount.direction).toBe('better');
+  });
+
+  it('已存檔的練習重錄之後回到未完成，還接得回來', async () => {
+    const s = await loadSession({ now: NOW });
+    await s.completeRound(spoken(ROUND1, 180));
+    await s.completeRound(spoken(ROUND2, 130));
+    await s.completeRound(spoken(ROUND3, 95));
+    await s.finish('專注力那篇文章');
+    await s.redoRound(3);
+
+    expect(s.isSaved).toBe(false);
+    expect(s.practice.title).toBe('專注力那篇文章');
+
+    // 關掉再開，接在第 3 遍
+    const again = await loadSession({ now: NOW + 1000 });
+    expect(again.practice.id).toBe(s.practice.id);
+    expect(again.currentRoundNumber).toBe(3);
+  });
+
+  it('重錄不存在的那一遍不會出事', async () => {
+    const s = await loadSession({ now: NOW });
+    await s.completeRound(spoken(ROUND1, 180));
+    await s.redoRound(3);
+    expect(s.rounds).toHaveLength(1);
+  });
+
+  it('重錄的內容真的寫回資料庫', async () => {
+    const s = await loadSession({ now: NOW });
+    await s.completeRound(spoken(ROUND1, 180));
+    await s.redoRound(1);
+    const saved = await getPractice(s.practice.id, { now: NOW });
+    expect(saved.rounds).toHaveLength(0);
+  });
+
   it('可以直接包住一筆既有的練習', async () => {
     const s = await loadSession({ now: NOW });
     await s.completeRound(spoken(ROUND1, 180));

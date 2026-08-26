@@ -4,10 +4,9 @@
  * 不負責：搜尋邏輯本身（在儲存模組）、任何運算
  */
 
-import { el, formatSeconds } from './ui-common.js';
+import { el, formatSeconds, renderMetricsTable } from './ui-common.js';
 import { renderRoundCard } from './ui-transcript.js';
 import { renderReview } from './ui-review.js';
-import { compareMetrics } from './compare.js';
 
 function summaryOf(practice) {
   const rounds = practice.rounds || [];
@@ -73,8 +72,11 @@ export function renderHistory(container, { practices = [], keyword = '' } = {}, 
   return container;
 }
 
-/** 某一筆練習的完整內容：三遍逐字稿上下堆疊，加上 AI 分析 */
-export function renderDetail(container, practice, handlers = {}) {
+/**
+ * 某一筆練習的完整內容：三遍逐字稿上下堆疊、數據對比表、AI 分析。
+ * @param {object} state {reviewing, reviewError} 分析進行中的狀態
+ */
+export function renderDetail(container, practice, handlers = {}, state = {}) {
   container.replaceChildren();
   if (!practice) {
     container.appendChild(el('p', 'empty', '找不到這筆練習。'));
@@ -96,10 +98,8 @@ export function renderDetail(container, practice, handlers = {}) {
   stack.id = 'detail-rounds';
   const rounds = practice.rounds || [];
   for (let i = 0; i < rounds.length; i += 1) {
-    const prev = rounds[i - 1];
     stack.appendChild(
       renderRoundCard(rounds[i], {
-        delta: prev ? compareMetrics(rounds[i].metrics, prev.metrics) : null,
         context: { date: practice.date, title: practice.title },
         onEdit: handlers.onEditTranscript,
         onExportAudio: handlers.onExportAudio,
@@ -107,11 +107,29 @@ export function renderDetail(container, practice, handlers = {}) {
     );
   }
   container.appendChild(stack);
+  container.appendChild(renderMetricsTable(rounds));
 
   const reviewCard = el('section', 'card');
   reviewCard.id = 'detail-review';
-  reviewCard.appendChild(el('h3', 'card-title', 'AI 檢查'));
+  reviewCard.appendChild(el('h3', 'card-title', 'AI 分析'));
   reviewCard.appendChild(renderReview(practice.review));
+
+  // 當下沒分析就離開的話，之後從這裡補做；做過的也能重跑
+  if (handlers.onReview) {
+    const done = !!practice.review;
+    const label = state.reviewing ? '分析中…' : done ? '重新分析' : '做 AI 分析';
+    const btn = el('button', 'btn', label);
+    btn.type = 'button';
+    btn.id = 'detail-review-btn';
+    btn.disabled = !!state.reviewing;
+    btn.addEventListener('click', () => handlers.onReview(practice.id));
+    reviewCard.appendChild(btn);
+  }
+  if (state.reviewError) {
+    const err = el('p', 'notice', state.reviewError);
+    err.id = 'detail-review-error';
+    reviewCard.appendChild(err);
+  }
   container.appendChild(reviewCard);
 
   const tools = el('div', 'card');

@@ -99,7 +99,7 @@ export function renderSettings(container, handlers = {}) {
   const card = el('div', 'card');
   card.appendChild(el('h2', 'card-title', 'Gemini 金鑰'));
   card.appendChild(
-    el('p', 'hint', '只存在這台手機裡，不會上傳、不會進原始碼。沒有金鑰也能練習，只是不能做 AI 檢查。'),
+    el('p', 'hint', '只存在這台手機裡，不會上傳、不會進原始碼。沒有金鑰也能練習，只是不能做 AI 分析。'),
   );
 
   const label = el('label', 'field');

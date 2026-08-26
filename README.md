@@ -47,12 +47,12 @@ npm run icons
 | `tests/` | Vitest 測試。每個模組一個檔 |
 | `docs/` | 需求與架構文件 |
 
-## 要用 AI 檢查的話
+## 要用 AI 分析的話
 
 1. 到 [Google AI Studio](https://aistudio.google.com/apikey) 申請一把 Gemini API 金鑰
 2. 打開 APP → 右上角「設定」→ 貼上金鑰 → 儲存
 
-金鑰只存在這台裝置的瀏覽器裡，不會進原始碼、不會上傳。沒有金鑰也能正常練習，只是不能做 AI 檢查。
+金鑰只存在這台裝置的瀏覽器裡，不會進原始碼、不會上傳。沒有金鑰也能正常練習，只是不能做 AI 分析。
 
 ## 資料存在哪
 

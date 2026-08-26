@@ -38,12 +38,12 @@ export const MAX_RESCUE_ITEMS = 2;
 
 const ERROR_MESSAGES = {
   'no-key': '還沒有設定 Gemini 金鑰。請先到設定頁貼上金鑰。',
-  offline: '目前沒有網路。AI 檢查需要連網，等有網路再按一次。',
+  offline: '目前沒有網路。AI 分析需要連網，等有網路再按一次。',
   network: '連不上 Gemini，稍後再試。這次練習的資料都還在。',
   apikey: '金鑰被拒絕了。請到設定頁檢查金鑰是否正確。',
   'rate-limit': '今天的免費額度用完了，稍後再試。這次練習的資料都還在。',
   'bad-response': 'AI 回傳的內容看不懂，稍後再試。這次練習的資料都還在。',
-  failed: 'AI 檢查失敗，稍後再試。這次練習的資料都還在。',
+  failed: 'AI 分析失敗，稍後再試。這次練習的資料都還在。',
 };
 
 export function reviewErrorMessage(code) {
@@ -209,7 +209,7 @@ function statusToCode(status) {
 }
 
 /**
- * 送出 AI 檢查。
+ * 送出 AI 分析。
  * 任何失敗都只回傳錯誤碼與訊息，不丟例外、不動已存的資料。
  *
  * @param {{rounds:Array, apiKey:string, fetch?:Function, online?:boolean, signal?:AbortSignal}} options

@@ -44,8 +44,8 @@ beforeEach(async () => {
   document.body.replaceChildren();
 });
 
-describe('T14 AI 檢查結果畫面與保存', () => {
-  it('檢查完成後四個區塊都出現', () => {
+describe('T14 AI 分析結果畫面與保存', () => {
+  it('分析完成後四個區塊都出現', () => {
     const box = mount();
     box.appendChild(renderReview(REVIEW));
     const sections = box.querySelectorAll('.review-section');
@@ -88,10 +88,10 @@ describe('T14 AI 檢查結果畫面與保存', () => {
     expect(box.querySelector('[data-section="rescue"]').textContent).toContain('沒有');
   });
 
-  it('還沒做檢查時說還沒做，不當掉', () => {
+  it('還沒做分析時說還沒做，不當掉', () => {
     const box = mount();
     box.appendChild(renderReview(null));
-    expect(box.textContent).toContain('還沒做 AI 檢查');
+    expect(box.textContent).toContain('還沒做 AI 分析');
   });
 
   it('畫面上沒有分數、等第或鼓勵性評語', () => {
@@ -102,7 +102,7 @@ describe('T14 AI 檢查結果畫面與保存', () => {
     }
   });
 
-  it('檢查結果與該次練習一起存檔，重新進入還在', async () => {
+  it('分析結果與該次練習一起存檔，重新進入還在', async () => {
     const session = await finishedSession();
     const fetchMock = vi.fn(() =>
       Promise.resolve({

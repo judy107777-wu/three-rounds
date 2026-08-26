@@ -59,6 +59,15 @@ describe('T02 設計樣式基底', () => {
     expect(card).toContain('border-radius: var(--radius)');
   });
 
+  it('逐字稿框撐滿容器，不用瀏覽器預設寬度', () => {
+    // 沒有 width 的 textarea 一行只放得下 11 個字
+    expect(rule('.transcript')).toContain('width: 100%');
+  });
+
+  it('窄螢幕把邊界縮小，讓逐字稿一行放得下 18 個字', () => {
+    expect(css).toContain('@media (max-width: 430px)');
+  });
+
   it('逐字稿行高放寬到 1.8', () => {
     expect(token('--line-height-read')).toBe('1.8');
     expect(rule('.transcript')).toContain('line-height: var(--line-height-read)');

@@ -126,11 +126,23 @@ describe('T11 逐字稿編輯與補字', () => {
     expect(card.querySelector('textarea').readOnly).toBe(true);
   });
 
-  it('數據顯示在逐字稿下緣', () => {
+  it('數據不放在逐字稿卡片裡，統一收到三遍對比表', () => {
     const card = mount(renderRoundCard(roundOf()));
-    const children = [...card.children];
-    const textareaIndex = children.findIndex((c) => c.tagName === 'TEXTAREA');
-    const metricsIndex = children.findIndex((c) => c.classList.contains('metrics'));
-    expect(metricsIndex).toBeGreaterThan(textareaIndex);
+    expect(card.querySelector('.metrics')).toBeNull();
+    expect(card.querySelector('textarea')).not.toBeNull();
+  });
+
+  it('卡片上有「重錄」，按下去把是第幾遍交出去', () => {
+    const onRedo = vi.fn();
+    const card = mount(renderRoundCard(roundOf({ index: 2 }), { onRedo }));
+    const btn = card.querySelector('[data-role="redo"]');
+    expect(btn.textContent).toBe('重錄');
+    btn.click();
+    expect(onRedo).toHaveBeenCalledWith(2);
+  });
+
+  it('沒有給重錄的處理函式就不出現那顆按鈕', () => {
+    const card = mount(renderRoundCard(roundOf()));
+    expect(card.querySelector('[data-role="redo"]')).toBeNull();
   });
 });
