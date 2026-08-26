@@ -1,0 +1,110 @@
+/**
+ * 設定畫面
+ * 負責：Gemini 金鑰的輸入與保存、匯出入口
+ * 不負責：呼叫 Gemini、產生匯出檔內容
+ *
+ * 金鑰只存在這台裝置的瀏覽器裡，不會進原始碼、不會上傳。
+ */
+
+const KEY_STORAGE = 'stt.gemini-key';
+
+function store() {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+export function getApiKey() {
+  const s = store();
+  if (!s) return '';
+  return (s.getItem(KEY_STORAGE) || '').trim();
+}
+
+export function setApiKey(key) {
+  const s = store();
+  if (!s) return '';
+  const value = (key || '').trim();
+  if (value) s.setItem(KEY_STORAGE, value);
+  else s.removeItem(KEY_STORAGE);
+  return value;
+}
+
+export function clearApiKey() {
+  const s = store();
+  if (s) s.removeItem(KEY_STORAGE);
+}
+
+export function hasApiKey() {
+  return getApiKey() !== '';
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+/**
+ * 畫出設定頁。
+ * @param {HTMLElement} container
+ * @param {{onSaved?:Function, onExport?:Function, onToast?:Function}} handlers
+ */
+export function renderSettings(container, handlers = {}) {
+  container.replaceChildren();
+
+  const card = el('div', 'card');
+  card.appendChild(el('h2', 'card-title', 'Gemini 金鑰'));
+  card.appendChild(
+    el('p', 'hint', '只存在這台手機裡，不會上傳、不會進原始碼。沒有金鑰也能練習，只是不能做 AI 檢查。'),
+  );
+
+  const label = el('label', 'field');
+  label.appendChild(el('span', 'field-label', '金鑰'));
+  const input = el('input', 'input');
+  input.type = 'password';
+  input.id = 'settings-api-key';
+  input.autocomplete = 'off';
+  input.placeholder = '貼上你的 Gemini API 金鑰';
+  input.value = getApiKey();
+  label.appendChild(input);
+  card.appendChild(label);
+
+  const saveBtn = el('button', 'btn btn-primary', '儲存金鑰');
+  saveBtn.type = 'button';
+  saveBtn.id = 'settings-save';
+  saveBtn.addEventListener('click', () => {
+    const saved = setApiKey(input.value);
+    input.value = saved;
+    handlers.onToast?.(saved ? '金鑰已存在這台裝置' : '已清除金鑰');
+    handlers.onSaved?.(saved);
+  });
+  card.appendChild(saveBtn);
+
+  const clearBtn = el('button', 'btn-text', '清除金鑰');
+  clearBtn.type = 'button';
+  clearBtn.id = 'settings-clear';
+  clearBtn.addEventListener('click', () => {
+    clearApiKey();
+    input.value = '';
+    handlers.onToast?.('已清除金鑰');
+    handlers.onSaved?.('');
+  });
+  card.appendChild(clearBtn);
+
+  container.appendChild(card);
+
+  const exportCard = el('div', 'card');
+  exportCard.appendChild(el('h2', 'card-title', '匯出'));
+  exportCard.appendChild(el('p', 'hint', '把全部練習紀錄存成一個檔案，自己收好。'));
+  const exportBtn = el('button', 'btn', '匯出全部紀錄');
+  exportBtn.type = 'button';
+  exportBtn.id = 'settings-export';
+  exportBtn.addEventListener('click', () => handlers.onExport?.());
+  exportCard.appendChild(exportBtn);
+  container.appendChild(exportCard);
+
+  return container;
+}

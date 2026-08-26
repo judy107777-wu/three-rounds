@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF6F0">
+<title>三遍練習</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+<header class="app-bar">
+  <h1 class="app-title">三遍練習</h1>
+  <nav class="app-nav">
+    <button type="button" id="nav-today" class="nav-btn" aria-label="今日練習">今日</button>
+    <button type="button" id="nav-history" class="nav-btn" aria-label="歷史紀錄">歷史</button>
+    <button type="button" id="nav-settings" class="nav-btn" aria-label="設定">設定</button>
+  </nav>
+</header>
+
+<main class="app-main">
+  <section id="view-today" class="view" aria-label="今日練習"></section>
+  <section id="view-history" class="view" aria-label="歷史紀錄" hidden></section>
+  <section id="view-settings" class="view" aria-label="設定" hidden></section>
+  <section id="view-detail" class="view" aria-label="練習內容" hidden></section>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

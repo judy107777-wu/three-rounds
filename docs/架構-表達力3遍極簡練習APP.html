@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>架構規劃：表達力 3 遍極簡練習 APP</title>
+<style>
+:root{
+  --paper:#FAF6F0;
+  --card:#FFFFFF;
+  --ink:#3D3630;
+  --ink-2:#8A7F73;
+  --main:#8B6F52;
+  --sub:#D9C7B4;
+  --accent:#C1654F;
+  --up:#5F7A52;
+  --down:#B08968;
+  --rule:#E7DED2;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);line-height:1.8;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:860px;margin:0 auto;padding:0 24px 120px}
+
+/* ── hero ─────────────────────────────── */
+.hero{padding:72px 0 48px;border-bottom:1px solid var(--rule)}
+.eyebrow{
+  font-family:var(--mono);font-size:12px;letter-spacing:.14em;
+  color:var(--ink-2);text-transform:uppercase;margin:0 0 18px
+}
+h1{font-size:32px;line-height:1.35;margin:0 0 16px;font-weight:700;letter-spacing:-.01em}
+.lede{font-size:17px;color:var(--ink-2);margin:0;max-width:52ch}
+.meta{margin-top:28px;font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.meta span{margin-right:18px}
+
+/* signature: real practice data */
+.sig{margin:40px 0 0;padding:24px;background:var(--card);border-radius:14px;border:1px solid var(--rule)}
+.sig-cap{font-size:12px;font-family:var(--mono);color:var(--ink-2);margin:0 0 16px;letter-spacing:.06em}
+.bar-row{display:flex;align-items:center;gap:14px;margin-bottom:10px}
+.bar-lab{font-family:var(--mono);font-size:12px;color:var(--ink-2);width:66px;flex:none}
+.bar{height:22px;border-radius:4px;background:var(--sub);position:relative}
+.bar.b3{background:var(--main)}
+.bar-val{font-family:var(--mono);font-size:12px;color:var(--ink-2);white-space:nowrap}
+.sig-note{margin:16px 0 0;font-size:14px;color:var(--ink-2)}
+
+/* ── sections ─────────────────────────── */
+section{padding:56px 0;border-bottom:1px solid var(--rule)}
+h2{
+  font-size:22px;margin:0 0 6px;font-weight:700;letter-spacing:-.01em;
+  display:flex;align-items:baseline;gap:12px
+}
+h2 .n{font-family:var(--mono);font-size:12px;color:var(--main);letter-spacing:.1em;font-weight:400}
+.sub{margin:0 0 28px;color:var(--ink-2);font-size:15px;max-width:56ch}
+h3{font-size:16px;margin:36px 0 12px;font-weight:700}
+
+/* ── table ────────────────────────────── */
+.t-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:520px}
+th{
+  text-align:left;font-weight:700;font-size:12.5px;letter-spacing:.05em;
+  color:var(--ink-2);border-bottom:2px solid var(--sub);padding:10px 14px 10px 0;
+  white-space:nowrap
+}
+td{padding:14px 14px 14px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+td:last-child,th:last-child{padding-right:0}
+tbody tr:last-child td{border-bottom:none}
+.no{color:var(--ink-2)}
+.cost{font-family:var(--mono);font-size:13px;white-space:nowrap}
+
+/* ── flow ─────────────────────────────── */
+.flow{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:28px 24px}
+.step{display:flex;gap:16px;padding:14px 0;border-bottom:1px dashed var(--rule)}
+.step:last-child{border-bottom:none}
+.step-n{
+  font-family:var(--mono);font-size:12px;color:var(--card);background:var(--main);
+  width:24px;height:24px;border-radius:50%;flex:none;
+  display:flex;align-items:center;justify-content:center;margin-top:3px
+}
+.step-n.opt{background:var(--sub);color:var(--ink)}
+.step-b strong{display:block;font-size:15px;margin-bottom:2px}
+.step-b span{font-size:14px;color:var(--ink-2)}
+
+/* ── swatches ─────────────────────────── */
+.sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:14px;margin-top:8px}
+.sw{background:var(--card);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.sw-chip{height:64px}
+.sw-b{padding:10px 12px}
+.sw-b b{display:block;font-size:13px}
+.sw-b code{font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
+.sw-b p{margin:6px 0 0;font-size:12px;color:var(--ink-2);line-height:1.5}
+
+/* ── redline ──────────────────────────── */
+.red{background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--accent);
+     border-radius:0 12px 12px 0;padding:22px 24px}
+.red ol{margin:0;padding-left:20px}
+.red li{margin-bottom:8px;font-size:14.5px}
+.red li:last-child{margin-bottom:0}
+
+/* ── task cards ───────────────────────── */
+.batch{margin-bottom:32px}
+.batch-h{
+  display:flex;align-items:center;gap:12px;margin-bottom:14px;
+  font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--main)
+}
+.batch-h::after{content:"";flex:1;height:1px;background:var(--rule)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:18px}
+.card-id{font-family:var(--mono);font-size:11.5px;color:var(--main);letter-spacing:.08em}
+.card h4{margin:4px 0 10px;font-size:15px;font-weight:700}
+.card p{margin:0;font-size:13.5px;color:var(--ink-2);line-height:1.65}
+.verify{margin-top:12px;padding-top:12px;border-top:1px dashed var(--rule)}
+.verify b{display:block;font-size:11.5px;letter-spacing:.06em;color:var(--accent);margin-bottom:4px}
+.par{display:inline-block;margin-top:12px;font-family:var(--mono);font-size:11px;
+     padding:2px 8px;border-radius:20px;background:#EFE7DC;color:var(--ink-2)}
+.par.yes{background:#E4EADF;color:var(--up)}
+
+/* ── open items ───────────────────────── */
+.open li{margin-bottom:10px;font-size:14.5px}
+footer{padding:48px 0;color:var(--ink-2);font-size:13px;font-family:var(--mono)}
+@media(max-width:600px){
+  h1{font-size:26px}
+  .hero{padding:52px 0 36px}
+  section{padding:44px 0}
+  .cards{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">架構規劃 ／ 待確認</p>
+  <h1>表達力 3 遍極簡練習 APP</h1>
+  <p class="lede">每天在手機上花 15 分鐘，同一個主題連續講三遍，改善「講話被腦中的分支帶走、失去重點」的問題。</p>
+  <p class="meta">
+    <span>2026-08-27</span>
+    <span>個人自用</span>
+    <span>18 個任務</span>
+    <span>分 7 批執行</span>
+    <span>每月 0 元</span>
+  </p>
+
+  <div class="sig">
+    <p class="sig-cap">你 8 月 26 日的實際練習｜三遍長度</p>
+    <div class="bar-row">
+      <span class="bar-lab">第 1 遍</span>
+      <div class="bar" style="width:27%"></div>
+      <span class="bar-val">1:23</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-lab">第 2 遍</span>
+      <div class="bar" style="width:60%"></div>
+      <span class="bar-val">3:04</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-lab">第 3 遍</span>
+      <div class="bar b3" style="width:31%"></div>
+      <span class="bar-val">1:35</span>
+    </div>
+    <p class="sig-note">這三根長條就是這個 APP 每天要幫你畫出來的東西。這次因為中間重看了影片，第 2 遍變長了 2.2 倍——這種事只有把數字攤開才看得到。</p>
+  </div>
+</header>
+
+<!-- 1 ───────────────────────────────── -->
+<section>
+  <h2><span class="n">01</span>每天怎麼用</h2>
+  <p class="sub">從點開圖示到存檔完成的完整動線。灰色編號的兩步是選用的，不做也能完成一次練習。</p>
+
+  <div class="flow">
+    <div class="step"><div class="step-n">1</div><div class="step-b">
+      <strong>點桌面圖示</strong><span>直接進入今天的練習畫面。不用輸入任何文字，不用選任何東西。</span></div></div>
+    <div class="step"><div class="step-n">2</div><div class="step-b">
+      <strong>按下大按鈕，開始講第 1 遍</strong><span>畫面上的秒數往上跑。講完自己按停止，沒有時間限制。</span></div></div>
+    <div class="step"><div class="step-n">3</div><div class="step-b">
+      <strong>看逐字稿與數據</strong><span>剛才講的字會出現在畫面上，下面是秒數、字數、贅詞數。</span></div></div>
+    <div class="step"><div class="step-n">4</div><div class="step-b">
+      <strong>第 2 遍、第 3 遍</strong><span>同樣的流程，但多顯示一行：這一遍跟前一遍差多少。</span></div></div>
+    <div class="step"><div class="step-n opt">＊</div><div class="step-b">
+      <strong>中途可以離開</strong><span>通勤時講完第 1 遍就關掉也沒關係。下次打開會回到第 2 遍等你。</span></div></div>
+    <div class="step"><div class="step-n">5</div><div class="step-b">
+      <strong>補上今天的標題</strong><span>三遍都講完之後才問你這次講的是什麼，之後用來搜尋。</span></div></div>
+    <div class="step"><div class="step-n">6</div><div class="step-b">
+      <strong>按「AI 檢查」</strong><span>把三遍的文字送出去，回來四項分析：該救回什麼、該刪什麼還留著、哪些是後來才冒出來的、結論有沒有放在第一句。</span></div></div>
+    <div class="step"><div class="step-n">7</div><div class="step-b">
+      <strong>存檔</strong><span>逐字稿、數據、AI 分析永久留著。錄音檔 7 天後自動清掉，想留的可以釘選。</span></div></div>
+    <div class="step"><div class="step-n opt">＊</div><div class="step-b">
+      <strong>回頭找舊的練習</strong><span>打關鍵字就能翻出來，會搜標題也會搜逐字稿內容。</span></div></div>
+  </div>
+</section>
+
+<!-- 2 ───────────────────────────────── -->
+<section>
+  <h2><span class="n">02</span>你做的選擇</h2>
+  <p class="sub">這些是你在討論過程中拍板的決定。每一個都有代價，寫在最後一欄，讓你知道自己換掉了什麼。</p>
+
+  <div class="t-scroll"><table>
+  <thead><tr><th>你選了什麼</th><th>為什麼這樣選</th><th>對你的好處</th><th>代價</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>不做雲端備份</b></td>
+      <td>第一版先做最單純的，七天後再說</td>
+      <td>不用申請授權、不用設定，今天就能開始用</td>
+      <td>清掉瀏覽器資料或換手機，紀錄會全部不見。你已表示七天內可以接受。改用一顆手動匯出按鈕擋著</td>
+    </tr>
+    <tr>
+      <td><b>不做提醒通知</b></td>
+      <td>不想被 APP 追著跑</td>
+      <td>不會有跳出來催你的訊息，斷一天也沒有壓力</td>
+      <td>忘記練就是忘記了，沒有東西提醒你</td>
+    </tr>
+    <tr>
+      <td><b>不做連續天數統計</b></td>
+      <td>怕變成不能斷的壓力</td>
+      <td>斷一天不會看到數字歸零，隔天比較願意再打開</td>
+      <td>看不到「我練了幾天」這種成就感，需要靠自己維持</td>
+    </tr>
+    <tr>
+      <td><b>不給分數與鼓勵語</b></td>
+      <td>不知道評分標準的分數沒有意義</td>
+      <td>看到的都是具體的東西，不會被空泛的稱讚敷衍</td>
+      <td>沒有正回饋，撐下去完全靠自己</td>
+    </tr>
+    <tr>
+      <td><b>AI 不准改寫你的話</b></td>
+      <td>改寫會讓人變成背稿，違背練習目的</td>
+      <td>指出來的東西都是你自己說過的，改進的是你的表達不是它的</td>
+      <td>不會有一份「標準答案」可以照著唸，要自己想怎麼修</td>
+    </tr>
+    <tr>
+      <td><b>不用先打字就能開始講</b></td>
+      <td>每天多一道手續，就多一個不想打開的理由</td>
+      <td>點開就能講，最少的摩擦</td>
+      <td>少了開口前先想清楚的那道逼迫，可能更容易講散</td>
+    </tr>
+    <tr>
+      <td><b>三遍可以分次講完</b></td>
+      <td>練習地點不固定，通勤、教室、家裡都有可能</td>
+      <td>零碎時間也能練，不用湊出完整 15 分鐘</td>
+      <td>中間隔太久，第 3 遍時腦中的內容已經冷掉，精煉效果會打折</td>
+    </tr>
+    <tr>
+      <td><b>斷網時手動貼逐字稿</b></td>
+      <td>先看看斷網到底常不常發生</td>
+      <td>不用多接一個服務、不用多付錢</td>
+      <td>斷網那一遍要你自己把錄音檔丟給 Gemini 再貼回來。如果常發生會很煩，七天後再評估</td>
+    </tr>
+    <tr>
+      <td><b>用 Gemini 2.5 Flash</b></td>
+      <td>三段一千多字的中文比對，不需要更貴的</td>
+      <td>免費額度內，實質不花錢</td>
+      <td>分析細緻度略遜於更貴的模型。當初的另一個選項是 Gemini 2.5 Pro（每月約 10 元），差異在這個用途上不明顯，所以沒選</td>
+    </tr>
+    <tr>
+      <td><b>放 GitHub Pages</b></td>
+      <td>你已經有帳號，網址固定</td>
+      <td>改版只要覆蓋檔案，手機桌面圖示不用重裝</td>
+      <td>網站是公開的。但你的練習資料都在自己手機裡，別人打開只會看到一個空的工具</td>
+    </tr>
+    <tr>
+      <td><b>用純網頁做，不用框架</b></td>
+      <td>畫面只有三四個，用不到框架的好處</td>
+      <td>改一個檔案就是改一件事，你用 Claude Code 改的時候最不容易出錯</td>
+      <td>如果之後功能長很大，管理會比較吃力。以目前規劃不會發生</td>
+    </tr>
+    <tr>
+      <td><b>做自動檢查（Vitest）</b></td>
+      <td>後續全靠 AI 改程式</td>
+      <td>AI 改壞別的地方時會立刻被抓出來，你不用自己一頁一頁試</td>
+      <td>每個任務都要多寫測試，第一版會慢一點才交到你手上</td>
+    </tr>
+  </tbody>
+  </table></div>
+</section>
+
+<!-- 3 ───────────────────────────────── -->
+<section>
+  <h2><span class="n">03</span>程式分成六塊</h2>
+  <p class="sub">把工作切開，每一塊只做自己的事。「不負責」那一欄同樣重要——它防止 AI 在改 A 的時候順手動到 B。</p>
+
+  <div class="t-scroll"><table>
+  <thead><tr><th>這一塊</th><th>負責</th><th>不負責</th></tr></thead>
+  <tbody>
+    <tr><td><b>錄音</b></td><td>開始停止、秒數往上跑、產生音檔</td><td class="no">轉文字、存檔</td></tr>
+    <tr><td><b>轉文字</b></td><td>講的時候即時出字、偵測斷網並做記號</td><td class="no">錄音、修錯字、算數據</td></tr>
+    <tr><td><b>算數據</b></td><td>秒數、字數、語速、贅詞數、贅詞密度、跟前一遍差多少</td><td class="no">判斷講得好不好</td></tr>
+    <tr><td><b>存檔</b></td><td>資料讀寫、7 天清音檔、釘選、匯出</td><td class="no">畫面、資料內容對不對</td></tr>
+    <tr><td><b>AI 檢查</b></td><td>組指令、送出、解析回來的四項、處理失敗</td><td class="no">算數據、決定什麼時候送</td></tr>
+    <tr><td><b>畫面</b></td><td>三遍的引導、逐字稿呈現、歷史、搜尋、設定</td><td class="no">任何計算與資料存取</td></tr>
+  </tbody>
+  </table></div>
+</section>
+
+<!-- 4 ───────────────────────────────── -->
+<section>
+  <h2><span class="n">04</span>用什麼做，花多少錢</h2>
+  <p class="sub">全部 0 元。唯一可能收費的是 AI 檢查超出免費額度，你一天只用一次，不會超過。</p>
+
+  <div class="t-scroll"><table>
+  <thead><tr><th>項目</th><th>選用</th><th>白話說明</th><th>費用</th></tr></thead>
+  <tbody>
+    <tr><td>怎麼寫</td><td><b>純網頁</b></td><td>一個網頁檔，用手機瀏覽器開，可以加到桌面變圖示</td><td class="cost">0 元</td></tr>
+    <tr><td>資料存哪</td><td><b>手機瀏覽器裡</b></td><td>不上網，全部留在你自己的手機。錄音檔這種大東西也存得下</td><td class="cost">0 元</td></tr>
+    <tr><td>逐字稿怎麼來</td><td><b>瀏覽器內建</b></td><td>Android Chrome 自己就會，講的時候即時出字。需要連網</td><td class="cost">0 元</td></tr>
+    <tr><td>AI 檢查</td><td><b>Gemini 2.5 Flash</b></td><td>Google 的 AI。每天送一次三段文字給它看</td><td class="cost">免費額度內</td></tr>
+    <tr><td>放哪裡</td><td><b>GitHub Pages</b></td><td>你已有帳號，網頁上傳檔案就上線，網址固定</td><td class="cost">0 元</td></tr>
+    <tr><td>怎麼確認沒寫錯</td><td><b>Vitest</b></td><td>自動檢查工具。AI 每次改完會自己跑一遍，改壞了立刻知道</td><td class="cost">0 元</td></tr>
+  </tbody>
+  </table></div>
+
+  <h3>三件事一起交代</h3>
+  <div class="t-scroll"><table>
+  <thead><tr><th>問題</th><th>答案</th></tr></thead>
+  <tbody>
+    <tr><td>每個月要花多少</td><td>0 元。沒有月費，沒有訂閱</td></tr>
+    <tr><td>好不好維護</td><td>全部是檔案。沒有伺服器要顧、沒有帳單要看、沒有服務會突然停掉</td></tr>
+    <tr><td>換人接手難不難</td><td>純網頁加上一份最高原則文件，任何 AI 打開就能接手</td></tr>
+  </tbody>
+  </table></div>
+</section>
+
+<!-- 5 ───────────────────────────────── -->
+<section>
+  <h2><span class="n">05</span>看起來長什麼樣</h2>
+  <p class="sub">暖色系、像一本紙本練習簿。以下色塊就是實際會用的顏色。</p>
+
+  <div class="sw-grid">
+    <div class="sw"><div class="sw-chip" style="background:#FAF6F0;border-bottom:1px solid #E7DED2"></div>
+      <div class="sw-b"><b>背景</b><code>#FAF6F0</code><p>米白，像練習簿的紙</p></div></div>
+    <div class="sw"><div class="sw-chip" style="background:#FFFFFF;border-bottom:1px solid #E7DED2"></div>
+      <div class="sw-b"><b>卡片底</b><code>#FFFFFF</code><p>逐字稿卡片，浮在米白上</p></div></div>
+    <div class="sw"><div class="sw-chip" style="background:#8B6F52"></div>
+      <div class="sw-b"><b>主色</b><code>#8B6F52</code><p>奶茶棕，主要按鈕與標題</p></div></div>
+    <div class="sw"><div class="sw-chip" style="background:#D9C7B4"></div>
+      <div class="sw-b"><b>輔色</b><code>#D9C7B4</code><p>淺卡其，分隔線與邊框</p></div></div>
+    <div class="sw"><div class="sw-chip" style="background:#C1654F"></div>
+      <div class="sw-b"><b>強調色</b><code>#C1654F</code><p>磚紅，只用在錄音中</p></div></div>
+    <div class="sw"><div class="sw-chip" style="background:#3D3630"></div>
+      <div class="sw-b"><b>文字</b><code>#3D3630</code><p>深褐，比純黑柔和</p></div></div>
+    <div class="sw"><div class="sw-chip" style="background:#8A7F73"></div>
+      <div class="sw-b"><b>次要文字</b><code>#8A7F73</code><p>灰褐，秒數與日期</p></div></div>
+    <div class="sw"><div class="sw-chip" style="background:#5F7A52"></div>
+      <div class="sw-b"><b>進步</b><code>#5F7A52</code><p>苔綠，數字變好時</p></div></div>
+    <div class="sw"><div class="sw-chip" style="background:#B08968"></div>
+      <div class="sw-b"><b>退步</b><code>#B08968</code><p>淺褐，刻意不用紅色</p></div></div>
+  </div>
+
+  <h3>字體方向</h3>
+  <div class="t-scroll"><table>
+  <thead><tr><th>用在哪</th><th>怎麼設</th></tr></thead>
+  <tbody>
+    <tr><td>標題</td><td>中文黑體，字重中等偏粗。手機上要一眼看清</td></tr>
+    <tr><td>逐字稿</td><td>黑體常規字重，行高放寬到 1.8。辨識稿沒有標點，行距要夠才讀得下去</td></tr>
+    <tr><td>數字</td><td>等寬字體。三遍的秒數、字數要能上下對齊比較</td></tr>
+    <tr><td>字型檔</td><td>只用手機內建字體，不下載外部字型。確保離線也能正常顯示</td></tr>
+  </tbody>
+  </table></div>
+
+  <h3>版面怎麼排，以及為什麼</h3>
+  <div class="t-scroll"><table>
+  <thead><tr><th>怎麼做</th><th>對你的實際幫助</th></tr></thead>
+  <tbody>
+    <tr><td>首屏只有一件事：今天的練習，加一顆大按鈕</td><td>點開不用找、不用選，減少每天打開的心理成本</td></tr>
+    <tr><td>錄音按鈕放在畫面下方三分之一處</td><td>通勤與收工後多半單手操作，拇指要按得到</td></tr>
+    <tr><td>背景用米白不用純白</td><td>你主要在晚上用。純白在暗處刺眼，用久了會不想打開</td></tr>
+    <tr><td>數字變差時用淺褐，不用紅色</td><td>紅色會讓「今天講長了」讀起來像失敗，降低隔天打開的意願</td></tr>
+    <tr><td>沒有進度條、沒有連續天數</td><td>累積型的視覺元素會製造「不能斷」的壓力，斷一天之後就再也不想開</td></tr>
+    <tr><td>三遍逐字稿上下堆疊，不左右並排</td><td>手機寬度不夠橫排，硬排會兩邊都看不清</td></tr>
+  </tbody>
+  </table></div>
+</section>
+
+<!-- 6 ───────────────────────────────── -->
+<section>
+  <h2><span class="n">06</span>紅線規則</h2>
+  <p class="sub">這十條寫在專案的最高原則文件裡。開發的 AI 每次開工都會先讀，違反就是做錯，不接受任何理由。</p>
+
+  <div class="red">
+  <ol>
+    <li>不做任何形式的提醒通知</li>
+    <li>不做連續天數統計、打卡、成就徽章</li>
+    <li>不做註冊、登入、帳號綁定</li>
+    <li>不做雲端上傳，資料只存在本機</li>
+    <li>不給分數、等第、排名</li>
+    <li>不給鼓勵性評語。AI 回話出現稱讚就算錯</li>
+    <li>AI 不准改寫或代寫講稿，只能指出問題並引用你自己說過的話</li>
+    <li>不做動畫特效</li>
+    <li>不做題庫、主題建議</li>
+    <li>開始練習前不要求輸入任何文字</li>
+  </ol>
+  </div>
+
+  <h3>幾個名詞的定義</h3>
+  <p class="sub">寫下來是為了讓 AI 不會自己重新解釋。</p>
+  <div class="t-scroll"><table>
+  <thead><tr><th>名詞</th><th>是指</th><th>不是指</th></tr></thead>
+  <tbody>
+    <tr><td><b>一次練習</b></td><td>同一主題連續講三遍的完整紀錄</td><td class="no">單獨的某一遍</td></tr>
+    <tr><td><b>主題</b></td><td>三遍全講完之後才補的標題</td><td class="no">開始前輸入的東西。本 APP 開始前不輸入任何文字</td></tr>
+    <tr><td><b>補字</b></td><td>斷網導致沒有逐字稿時，事後貼上文字</td><td class="no">修正辨識錯字，那叫編輯</td></tr>
+    <tr><td><b>未完成練習</b></td><td>三遍還沒講完就離開的紀錄，必須留著能接續</td><td class="no">作廢的紀錄</td></tr>
+  </tbody>
+  </table></div>
+
+  <h3>怎樣算做完</h3>
+  <div class="t-scroll"><table>
+  <thead><tr><th>層級</th><th>標準</th></tr></thead>
+  <tbody>
+    <tr><td>單一任務</td><td>那個任務的自動檢查全部通過</td></tr>
+    <tr><td>整個 APP</td><td>在你的 Android 手機上完整跑完一次三遍練習並存檔；關掉再開，資料還在</td></tr>
+    <tr><td>七天後</td><td>你有沒有每天打開來練。順手度是唯一標準，表達有沒有變好抓 1～3 個月觀察</td></tr>
+  </tbody>
+  </table></div>
+</section>
+
+<!-- 7 ───────────────────────────────── -->
+<section>
+  <h2><span class="n">07</span>18 個任務，分 7 批</h2>
+  <p class="sub">每張卡片下方是「要先驗什麼」——照 TDD 的做法，先寫檢查條件，再寫程式，檢查全過才算完成。標「可平行」的任務動到不同檔案，可以同時開兩個 Claude Code 視窗分頭做。</p>
+
+  <div class="batch">
+    <div class="batch-h">第一批</div>
+    <div class="cards">
+      <div class="card"><span class="card-id">T01</span><h4>專案骨架與檢查環境</h4>
+        <p>建立資料夾、自動檢查工具設定、一個能開起來的空白頁。</p>
+        <div class="verify"><b>要先驗什麼</b><p>執行檢查指令 → 示範項目通過；開啟頁面 → 標題正確顯示。</p></div>
+        <span class="par">其他全部依賴它</span></div>
+    </div>
+  </div>
+
+  <div class="batch">
+    <div class="batch-h">第二批 ── 等 T01</div>
+    <div class="cards">
+      <div class="card"><span class="card-id">T02</span><h4>樣式基底</h4>
+        <p>把第 05 節的色票、字體、間距寫成可重複使用的設定，做出卡片與按鈕的樣子。</p>
+        <div class="verify"><b>要先驗什麼</b><p>載入頁面 → 背景色是米白；主按鈕的顏色跟主色一致。</p></div>
+        <span class="par yes">可平行</span></div>
+      <div class="card"><span class="card-id">T03</span><h4>數據計算</h4>
+        <p>給一段文字跟秒數，算出字數、語速、贅詞數、贅詞密度。</p>
+        <div class="verify"><b>要先驗什麼</b><p>丟入你第 3 遍的實際逐字稿與 95 秒 → 字數約 350、贅詞約 14、密度約 4.0；丟空字串 → 全部 0 且不當掉。</p></div>
+        <span class="par yes">可平行</span></div>
+      <div class="card"><span class="card-id">T05</span><h4>存檔</h4>
+        <p>一次練習的新增、讀取、更新、刪除、關鍵字搜尋。</p>
+        <div class="verify"><b>要先驗什麼</b><p>存一筆再讀出 → 內容一致；用逐字稿裡的詞搜 → 找得到；搜不到 → 回空的不當掉。</p></div>
+        <span class="par yes">可平行</span></div>
+      <div class="card"><span class="card-id">T07</span><h4>錄音</h4>
+        <p>開始、停止、秒數往上跑，產出音檔與實際秒數。</p>
+        <div class="verify"><b>要先驗什麼</b><p>模擬講 5 秒後停止 → 回傳 5 秒且有音檔；沒給麥克風權限 → 給明確提示不當掉。</p></div>
+        <span class="par yes">可平行</span></div>
+      <div class="card"><span class="card-id">T08</span><h4>轉文字</h4>
+        <p>錄音同時即時出字；斷網或瀏覽器不支援時做記號。</p>
+        <div class="verify"><b>要先驗什麼</b><p>模擬三段辨識 → 串成完整逐字稿；模擬斷網 → 逐字稿空白且標記待補字。</p></div>
+        <span class="par yes">可平行</span></div>
+    </div>
+  </div>
+
+  <div class="batch">
+    <div class="batch-h">第三批</div>
+    <div class="cards">
+      <div class="card"><span class="card-id">T04</span><h4>兩遍之間的差距</h4>
+        <p>比較兩遍的數據，算出差多少、是變好還是變差。</p>
+        <div class="verify"><b>要先驗什麼</b><p>330 字對 780 字 → 標示變長 136%；贅詞密度 3.0 變 4.3 → 標示退步；沒有前一遍 → 回空的不當掉。</p></div>
+        <span class="par">與 T03 同一批檔案</span></div>
+      <div class="card"><span class="card-id">T06</span><h4>音檔 7 天清除與釘選</h4>
+        <p>超過 7 天且沒釘選的音檔自動清掉，逐字稿與數據留著。</p>
+        <div class="verify"><b>要先驗什麼</b><p>8 天前未釘選 → 音檔沒了、逐字稿還在；8 天前已釘選 → 音檔還在。</p></div>
+        <span class="par">與 T05 同一檔案</span></div>
+      <div class="card"><span class="card-id">T12</span><h4>設定頁與金鑰</h4>
+        <p>輸入並保存 Gemini 金鑰，只存在你手機裡。</p>
+        <div class="verify"><b>要先驗什麼</b><p>輸入後重新載入 → 金鑰還在；沒輸入就按 AI 檢查 → 提示先去設定，不會送出任何東西；金鑰不出現在原始碼裡。</p></div>
+        <span class="par yes">可平行</span></div>
+      <div class="card"><span class="card-id">T16</span><h4>匯出</h4>
+        <p>一顆按鈕把全部紀錄匯成一個檔案。</p>
+        <div class="verify"><b>要先驗什麼</b><p>有三筆時匯出 → 檔案內含三筆；沒有紀錄時 → 提示無資料，不產生空檔。</p></div>
+        <span class="par yes">可平行</span></div>
+    </div>
+  </div>
+
+  <div class="batch">
+    <div class="batch-h">第四批</div>
+    <div class="cards">
+      <div class="card"><span class="card-id">T09</span><h4>三遍流程控制</h4>
+        <p>記住現在在第幾遍、可中斷續接、三遍完成後才問標題。</p>
+        <div class="verify"><b>要先驗什麼</b><p>講完第 1 遍離開再進來 → 停在第 2 遍待開始；三遍沒講完 → 不出現標題欄位。</p></div>
+        <span class="par">依賴 T05 T07 T08</span></div>
+      <div class="card"><span class="card-id">T13</span><h4>AI 檢查</h4>
+        <p>組指令、送出、解析回來的四項、處理各種失敗。</p>
+        <div class="verify"><b>要先驗什麼</b><p>指令必須含五項固定約束（忽略錯字、不給分數、不改寫、只引用你原話、500 字上限），逐一驗；斷網 → 提示稍後再試且不動已存資料。</p></div>
+        <span class="par yes">可平行</span></div>
+      <div class="card"><span class="card-id">T15</span><h4>歷史與搜尋</h4>
+        <p>依日期列出過往練習，關鍵字搜標題與逐字稿，三遍上下堆疊比對。</p>
+        <div class="verify"><b>要先驗什麼</b><p>存三筆 → 由新到舊排列；搜逐字稿裡的詞 → 找得到；點進去 → 三遍逐字稿與數據都在。</p></div>
+        <span class="par yes">可平行</span></div>
+    </div>
+  </div>
+
+  <div class="batch">
+    <div class="batch-h">第五批</div>
+    <div class="cards">
+      <div class="card"><span class="card-id">T10</span><h4>今日練習畫面</h4>
+        <p>開啟即進入，錄音按鈕、逐字稿卡片、數據呈現。</p>
+        <div class="verify"><b>要先驗什麼</b><p>開啟 → 沒有任何輸入框，直接看到錄音按鈕；第 2 遍結束 → 同時出現跟第 1 遍的差距。</p></div>
+        <span class="par">依賴 T02 T04 T09</span></div>
+    </div>
+  </div>
+
+  <div class="batch">
+    <div class="batch-h">第六批</div>
+    <div class="cards">
+      <div class="card"><span class="card-id">T11</span><h4>逐字稿編輯與補字</h4>
+        <p>逐字稿可改；斷網那遍提供貼上欄位；可以把該遍錄音檔取出來。</p>
+        <div class="verify"><b>要先驗什麼</b><p>改完逐字稿 → 數據自動重算；補完字 → 待補字記號消失；點取出音檔 → 產生可下載的檔案。</p></div>
+        <span class="par">依賴 T10</span></div>
+      <div class="card"><span class="card-id">T14</span><h4>AI 結果畫面與保存</h4>
+        <p>顯示四項分析，跟該次練習一起存起來。</p>
+        <div class="verify"><b>要先驗什麼</b><p>檢查完 → 四個區塊都出現；重新進入該筆 → 分析還在；分析內容不會被搜尋搜到。</p></div>
+        <span class="par">依賴 T13 T09</span></div>
+      <div class="card"><span class="card-id">T17</span><h4>桌面圖示與離線</h4>
+        <p>可以加到手機桌面，離線時除了 AI 檢查以外都能用。</p>
+        <div class="verify"><b>要先驗什麼</b><p>離線開啟 → 頁面正常載入；離線按 AI 檢查 → 顯示需要連網。</p></div>
+        <span class="par yes">可平行</span></div>
+    </div>
+  </div>
+
+  <div class="batch">
+    <div class="batch-h">第七批</div>
+    <div class="cards">
+      <div class="card"><span class="card-id">T18</span><h4>上線與實機驗證</h4>
+        <p>部署到 GitHub Pages，在你的 Android 手機上跑完整流程。</p>
+        <div class="verify"><b>要先驗什麼</b><p>全部既有檢查通過；實機完整跑一次三遍練習並存檔；關掉再開資料還在；加到主畫面後圖示可開啟。</p></div>
+        <span class="par">依賴全部</span></div>
+    </div>
+  </div>
+
+  <h3>可以同時開的分組</h3>
+  <div class="t-scroll"><table>
+  <thead><tr><th>分組</th><th>任務</th><th>為什麼不會打架</th></tr></thead>
+  <tbody>
+    <tr><td><b>A 運算</b></td><td>T03 → T04</td><td>只動計算的檔案，不碰畫面也不碰資料庫</td></tr>
+    <tr><td><b>B 資料</b></td><td>T05 → T06 → T16</td><td>只動存檔與匯出的檔案，不碰畫面</td></tr>
+    <tr><td><b>C 裝置</b></td><td>T07、T08</td><td>各自獨立，一個管錄音一個管轉文字，互不呼叫</td></tr>
+    <tr><td><b>D 樣式</b></td><td>T02 → T12</td><td>只動樣式與設定頁，不動主流程</td></tr>
+  </tbody>
+  </table></div>
+</section>
+
+<!-- 8 ───────────────────────────────── -->
+<section>
+  <h2><span class="n">08</span>七天後再回頭看的事</h2>
+  <p class="sub">你還沒實際做過完整的每日三遍練習，所以第一版刻意做小。以下是先記著、七天後再決定的項目。</p>
+
+  <ul class="open">
+    <li><b>自動存到雲端硬碟</b>——目前只有手動匯出按鈕。等你確認自己會持續用再處理。</li>
+    <li><b>斷網時由 APP 自己補字</b>——目前要你把錄音檔丟給 Gemini 再貼回來。看斷網到底多常發生再決定。</li>
+    <li><b>贅詞清單能不能自己加</b>——目前是系統預設的一組。練幾天之後你可能會發現自己有別的口頭禪。</li>
+    <li><b>AI 檢查的四項與 500 字上限合不合用</b>——太長你會懶得看，太短又講不清楚。</li>
+    <li><b>錄音回放到底用不用得到</b>——你說會直接看逐字稿，所以回放沒放在主要動線。如果七天內一次都沒用，之後可以拿掉。</li>
+    <li><b>表達有沒有真的變好</b>——這件事要 1～3 個月才看得出來，不列入七天驗收。</li>
+  </ul>
+</section>
+
+<footer>
+  架構規劃 ｜ 2026-08-27 ｜ 狀態：待確認<br>
+  來源需求：docs/需求-表達力3遍極簡練習APP.md ｜ 開工前先讀 CLAUDE.md
+</footer>
+
+</div>
+</body>
+</html>

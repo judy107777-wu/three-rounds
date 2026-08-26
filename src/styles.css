@@ -1,0 +1,396 @@
+/*
+ * 設計樣式基底（架構文件 3.4）
+ * 這裡只放樣式，不放任何邏輯。
+ * 色票與字體都寫成變數，之後要調整只改這一段。
+ */
+
+:root {
+  /* 色票 */
+  --bg: #FAF6F0;          /* 米白，像練習簿紙張，夜間不刺眼 */
+  --card: #FFFFFF;        /* 純白，浮在米白背景上形成層次 */
+  --primary: #8B6F52;     /* 奶茶棕，主要按鈕與標題 */
+  --secondary: #D9C7B4;   /* 淺卡其，分隔線、次要邊框 */
+  --accent: #C1654F;      /* 磚紅，只用在錄音中狀態與需要注意的數字 */
+  --text: #3D3630;        /* 深褐，比純黑柔和 */
+  --text-sub: #8A7F73;    /* 灰褐，秒數、日期等輔助資訊 */
+  --good: #5F7A52;        /* 苔綠，比前一遍變好 */
+  --bad: #B08968;         /* 淺褐，比前一遍變差。刻意不用紅色，避免變成責備 */
+
+  /* 字體 */
+  --font-sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+
+  /* 間距與圓角 */
+  --gap: 12px;
+  --gap-lg: 20px;
+  --radius: 12px;
+  --line-height-read: 1.8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── 頂部列 ───────────────────────────────── */
+
+.app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--gap) var(--gap-lg);
+  border-bottom: 1px solid var(--secondary);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+/* 歷史、設定收在右上角，不佔主畫面 */
+.app-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-sub);
+  font-family: inherit;
+  font-size: 15px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.nav-btn[aria-current="page"] {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.app-main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--gap-lg);
+}
+
+.view[hidden] {
+  display: none;
+}
+
+/* ── 卡片 ─────────────────────────────────── */
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--secondary);
+  padding: var(--gap-lg);
+  margin-bottom: var(--gap);
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+
+.card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0 0 8px;
+}
+
+/* ── 按鈕 ─────────────────────────────────── */
+
+.btn {
+  font-family: inherit;
+  font-size: 16px;
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--secondary);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--card);
+  font-weight: 600;
+}
+
+.btn-text {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  padding: 8px 4px;
+}
+
+/* 錄音按鈕做大且放低：單手拇指可及 */
+.record-area {
+  margin-top: 28vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.btn-record {
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  background: var(--card);
+  color: var(--primary);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-record.is-recording {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── 數據 ─────────────────────────────────── */
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  margin-top: var(--gap);
+  padding-top: var(--gap);
+  border-top: 1px solid var(--secondary);
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+.metric-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.timer {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 32px;
+  color: var(--text-sub);
+}
+
+.timer.is-recording {
+  color: var(--accent);
+}
+
+.delta {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.delta.tone-good {
+  color: var(--good);
+}
+
+.delta.tone-bad {
+  color: var(--bad);
+}
+
+.delta.tone-neutral {
+  color: var(--text-sub);
+}
+
+/* ── 逐字稿 ───────────────────────────────── */
+
+.transcript {
+  font-size: 16px;
+  line-height: var(--line-height-read);
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px;
+  min-height: 2em;
+}
+
+.transcript:focus {
+  outline: none;
+  border-color: var(--secondary);
+  background: var(--bg);
+}
+
+.transcript-empty {
+  color: var(--text-sub);
+}
+
+.notice {
+  font-size: 14px;
+  color: var(--accent);
+  margin: 8px 0;
+}
+
+.hint {
+  font-size: 14px;
+  color: var(--text-sub);
+}
+
+/* 三遍上下堆疊，不左右並排。手機寬度不夠橫排。 */
+.round-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* ── 表單 ─────────────────────────────────── */
+
+.field {
+  display: block;
+  margin-bottom: var(--gap);
+}
+
+.field-label {
+  display: block;
+  font-size: 14px;
+  color: var(--text-sub);
+  margin-bottom: 6px;
+}
+
+.input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--secondary);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.textarea {
+  min-height: 8em;
+  line-height: var(--line-height-read);
+  resize: vertical;
+}
+
+/* ── 歷史清單 ─────────────────────────────── */
+
+.history-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--secondary);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  margin-bottom: 8px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.history-date {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+.empty {
+  color: var(--text-sub);
+  font-size: 15px;
+  padding: var(--gap) 0;
+}
+
+/* ── 提示條 ───────────────────────────────── */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  max-width: 90vw;
+  z-index: 10;
+}
+
+.toast[hidden] {
+  display: none;
+}
+
+/* ── AI 檢查結果 ──────────────────────────── */
+
+.review-section {
+  margin-bottom: var(--gap-lg);
+}
+
+.review-section:last-child {
+  margin-bottom: 0;
+}
+
+.review-list {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.review-list li {
+  margin-bottom: 8px;
+  line-height: var(--line-height-read);
+}
+
+.review-point {
+  color: var(--text);
+}
+
+/* ── 單項數據 ─────────────────────────────── */
+
+.metric {
+  white-space: nowrap;
+}
+
+.metric-label,
+.metric-unit {
+  color: var(--text-sub);
+}
