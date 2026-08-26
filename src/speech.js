@@ -4,9 +4,24 @@
  * 不負責：錄音、修正錯字、計算數據
  *
  * 已知限制（不是 bug）：斷網時逐字稿會是空的，由使用者事後手動補字。
+ *
+ * Android Chrome 的兩個實測行為，這個模組必須自己扛：
+ * 1. continuous 沒有作用。講完一句就自己 onend，所以要自動接著再開。
+ * 2. 同一個結果會重複回傳、而且每次變長。所以依 index 覆寫，不能往後接。
  */
 
 export const RECOGNITION_LANG = 'zh-TW';
+
+/** 出這些錯就不要再自動重啟，重啟只會變成無窮迴圈 */
+const FATAL_ERRORS = new Set([
+  'not-allowed',
+  'service-not-allowed',
+  'audio-capture',
+  'language-not-supported',
+]);
+
+/** 自動重啟的上限。一次練習講幾分鐘也用不到這麼多次 */
+const MAX_RESTARTS = 200;
 
 const NOTICES = {
   unsupported: '這個瀏覽器不支援語音辨識，這一遍只會留下錄音。停止後可以自己把內容打上去。',
@@ -46,10 +61,15 @@ export function createRecognizer(options = {}) {
   const supported = typeof Ctor === 'function';
 
   let recognition = null;
+  // committed：先前幾段（自動重啟之前）已經定案的文字
+  // finals：這一段裡依 index 放的定案文字，同一個 index 再來就覆寫
+  let committed = '';
   let finals = [];
   let interim = '';
   let reason = null;
   let running = false;
+  let stopping = false;
+  let restarts = 0;
   let endResolvers = [];
 
   function settleEnd() {
@@ -59,24 +79,73 @@ export function createRecognizer(options = {}) {
     for (const fn of list) fn();
   }
 
-  function handleResult(event) {
-    // event.results 是累積的清單，從 resultIndex 開始才是這次新增的
+  function segmentText() {
+    return finals.join('');
+  }
+
+  function currentText() {
+    return (committed + segmentText() + interim).trim();
+  }
+
+  /** 把這一段的結果收進 committed，準備開下一段 */
+  function flushSegment() {
+    committed += segmentText();
+    finals = [];
     interim = '';
-    const from = typeof event.resultIndex === 'number' ? event.resultIndex : 0;
-    for (let i = from; i < event.results.length; i += 1) {
+  }
+
+  function handleResult(event) {
+    // 每次都從頭重建這一段的內容。
+    // Android 會把整句重複送成「確定」而且愈送愈長，往後接就會變成重複的字。
+    interim = '';
+    const next = [];
+    for (let i = 0; i < event.results.length; i += 1) {
       const result = event.results[i];
       const text = result[0] ? result[0].transcript : '';
       if (result.isFinal) {
-        finals.push(text);
+        // 有內容才覆寫。Android 會夾雜空的確定結果，照單全收會把已經聽到的洗掉。
+        next[i] = text || finals[i] || '';
       } else {
         interim += text;
       }
     }
+    // 這一次沒提到的 index 保留原值
+    for (let i = 0; i < finals.length; i += 1) {
+      if (next[i] === undefined) next[i] = finals[i];
+    }
+    finals = next.map((t) => t || '');
     onUpdate(currentText(), interim === '');
   }
 
-  function currentText() {
-    return (finals.join('') + interim).trim();
+  function attach(instance) {
+    instance.lang = options.lang || RECOGNITION_LANG;
+    instance.continuous = true;
+    instance.interimResults = true;
+    instance.onresult = handleResult;
+    instance.onerror = (e) => {
+      // no-speech 只是這一段沒聽到聲音，之後可能還有；不要蓋掉更嚴重的原因
+      const code = (e && e.error) || 'failed';
+      if (!reason || reason === 'no-speech') reason = code;
+    };
+    instance.onend = handleEnd;
+    return instance;
+  }
+
+  function handleEnd() {
+    // Android Chrome 不理會 continuous，講完一句就自己結束。
+    // 使用者還沒按停止的話，收好這一段再接著聽下去。
+    const fatal = FATAL_ERRORS.has(reason);
+    if (!stopping && !fatal && restarts < MAX_RESTARTS) {
+      flushSegment();
+      restarts += 1;
+      try {
+        recognition.start();
+        return;
+      } catch {
+        // 起不來就往下收尾
+      }
+    }
+    settleEnd();
   }
 
   /**
@@ -89,20 +158,13 @@ export function createRecognizer(options = {}) {
       return false;
     }
     if (running) return true;
+    committed = '';
     finals = [];
     interim = '';
     reason = null;
-    recognition = new Ctor();
-    recognition.lang = options.lang || RECOGNITION_LANG;
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.onresult = handleResult;
-    recognition.onerror = (e) => {
-      // no-speech 只是這一段沒聽到聲音，之後可能還有；不要覆蓋掉更嚴重的原因
-      const code = (e && e.error) || 'failed';
-      if (!reason || reason === 'no-speech') reason = code;
-    };
-    recognition.onend = () => settleEnd();
+    stopping = false;
+    restarts = 0;
+    recognition = attach(new Ctor());
     try {
       recognition.start();
     } catch {
@@ -119,6 +181,7 @@ export function createRecognizer(options = {}) {
    * @returns {Promise<{transcript:string, needsManualEntry:boolean, reason:string|null, notice:string|null}>}
    */
   async function stop() {
+    stopping = true;
     if (running && recognition) {
       await new Promise((resolve) => {
         endResolvers.push(resolve);
@@ -147,6 +210,9 @@ export function createRecognizer(options = {}) {
     supported,
     get running() {
       return running;
+    },
+    get restarts() {
+      return restarts;
     },
     get notice() {
       return supported ? null : fallbackNotice('unsupported');

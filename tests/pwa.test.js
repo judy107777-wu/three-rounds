@@ -77,6 +77,13 @@ describe('T17 桌面圖示與離線', () => {
     expect(sw).toMatch(/CACHE_NAME\s*=\s*'[^']+'/);
   });
 
+  it('先走網路再用快取，改好的版本才送得到手機上', () => {
+    expect(sw).toContain('networkFirst');
+    // 網路失敗才回頭找快取
+    const fn = sw.slice(sw.indexOf('async function networkFirst'));
+    expect(fn.indexOf('await fetch(request)')).toBeLessThan(fn.indexOf('caches.match(request)'));
+  });
+
   it('主程式會註冊離線快取', () => {
     const app = readFileSync(resolve(root, 'src/app.js'), 'utf8');
     expect(app).toContain('serviceWorker');

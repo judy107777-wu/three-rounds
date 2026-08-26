@@ -160,6 +160,34 @@ describe('T15 歷史紀錄與搜尋', () => {
     expect(onDelete).toHaveBeenCalledWith('a');
   });
 
+  it('沒有音檔的紀錄不出現釘選按鈕，因為釘選只保護音檔', async () => {
+    // 第一版不錄音，這就是實際會存下來的樣子
+    const p = createPractice({ now: NOW });
+    p.id = 'noaudio';
+    p.title = '主題';
+    p.status = 'done';
+    p.rounds = [{
+      index: 1,
+      seconds: 60,
+      transcript: '沒有音檔的一遍',
+      needsManualEntry: false,
+      audio: null,
+      audioType: null,
+      audioPurged: false,
+      metrics: computeMetrics('沒有音檔的一遍', 60),
+    }];
+    await savePractice(p);
+
+    const box = mount();
+    renderDetail(box, await getPractice('noaudio', { now: NOW }));
+    expect(box.querySelector('#detail-pin')).toBeNull();
+    expect(box.querySelector('#detail-delete')).not.toBeNull();
+    expect(box.querySelector('[data-role="export-audio"]')).toBeNull();
+    // 逐字稿與數據照常顯示
+    expect(box.querySelector('textarea').value).toBe('沒有音檔的一遍');
+    expect(box.querySelector('.metrics').textContent).toContain('贅詞密度');
+  });
+
   it('回到歷史紀錄的按鈕會把動作交出去', async () => {
     await seed('a', '主題', NOW, [roundOf(1, '內容', 60)]);
     const onBack = vi.fn();

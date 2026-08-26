@@ -5,7 +5,6 @@
  */
 
 import { loadSession, createSession } from './session.js';
-import { createRecorder, RecorderError } from './recorder.js';
 import { createRecognizer } from './speech.js';
 import { renderToday } from './ui-today.js';
 import { renderHistory, renderDetail } from './ui-history.js';
@@ -45,9 +44,9 @@ const state = {
   detailId: null,
 };
 
-let recorder = null;
 let recognizer = null;
 let timerId = null;
+let roundStartedAt = 0;
 
 function showView(name) {
   state.view = name;
@@ -69,10 +68,12 @@ function drawToday() {
 }
 
 const todayHandlers = {
+  // 第一版不錄音。Android 上麥克風只給一個來源用，
+  // 同時開錄音會讓辨識完全收不到聲音（實測 onnomatch、逐字稿全空）。
+  // 逐字稿是數據與 AI 檢查的根，所以優先讓給辨識。
   async onStart() {
     state.notice = '';
     state.liveText = '';
-    recorder = createRecorder();
     recognizer = createRecognizer({
       onUpdate: (text) => {
         state.liveText = text;
@@ -81,25 +82,18 @@ const todayHandlers = {
       },
     });
 
-    try {
-      await recorder.start();
-    } catch (err) {
-      state.notice = err instanceof RecorderError ? err.message : '錄音失敗，請再試一次。';
-      recorder = null;
-      drawToday();
-      return;
+    // 辨識起不來也讓這一遍照常進行，講完自己把內容打上去就好
+    if (!recognizer.start()) {
+      state.notice = recognizer.notice || '這一遍沒辦法辨識，講完可以自己把內容打上去。';
     }
 
-    if (!recognizer.start() && recognizer.notice) {
-      state.notice = recognizer.notice;
-    }
-
+    roundStartedAt = Date.now();
     state.recording = true;
     state.elapsed = 0;
     drawToday();
 
     timerId = setInterval(() => {
-      state.elapsed = recorder ? recorder.elapsedSeconds() : 0;
+      state.elapsed = Math.floor((Date.now() - roundStartedAt) / 1000);
       const timer = document.getElementById('record-timer');
       if (timer) timer.textContent = formatSeconds(state.elapsed);
     }, 500);
@@ -108,12 +102,13 @@ const todayHandlers = {
   async onStop() {
     clearInterval(timerId);
     timerId = null;
-    const audio = recorder ? await recorder.stop() : { seconds: 0, audio: null, audioType: null };
+    const seconds = roundStartedAt ? Math.round((Date.now() - roundStartedAt) / 1000) : 0;
+    roundStartedAt = 0;
+
     const speech = recognizer
       ? await recognizer.stop()
       : { transcript: '', needsManualEntry: true, reason: 'unsupported', notice: '' };
 
-    recorder = null;
     recognizer = null;
     state.recording = false;
     state.elapsed = 0;
@@ -121,9 +116,9 @@ const todayHandlers = {
     state.notice = speech.notice || '';
 
     await state.session.completeRound({
-      seconds: audio.seconds,
-      audio: audio.audio,
-      audioType: audio.audioType,
+      seconds,
+      audio: null,
+      audioType: null,
       transcript: speech.transcript,
       needsManualEntry: speech.needsManualEntry,
       reason: speech.reason,
@@ -297,9 +292,9 @@ export async function start() {
   registerServiceWorker();
 }
 
-// 讓錄音中不小心關掉分頁時麥克風會被放掉
+// 講到一半不小心關掉分頁時，把麥克風放掉
 window.addEventListener('pagehide', () => {
-  if (recorder) recorder.stop();
+  if (recognizer) recognizer.stop();
 });
 
 start();

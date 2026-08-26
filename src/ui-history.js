@@ -115,11 +115,17 @@ export function renderDetail(container, practice, handlers = {}) {
   container.appendChild(reviewCard);
 
   const tools = el('div', 'card');
-  const pin = el('button', 'btn-text', practice.pinned ? '取消釘選（音檔將於 7 天後清除）' : '釘選這筆（保留音檔）');
-  pin.type = 'button';
-  pin.id = 'detail-pin';
-  pin.addEventListener('click', () => handlers.onTogglePin?.(practice.id, !practice.pinned));
-  tools.appendChild(pin);
+
+  // 釘選的唯一作用是不讓音檔被 7 天清除。
+  // 這一版不錄音，沒有音檔的紀錄就不該出現一顆按了沒作用的按鈕。
+  const hasAudio = rounds.some((r) => r.audio || r.audioPurged);
+  if (hasAudio) {
+    const pin = el('button', 'btn-text', practice.pinned ? '取消釘選（音檔將於 7 天後清除）' : '釘選這筆（保留音檔）');
+    pin.type = 'button';
+    pin.id = 'detail-pin';
+    pin.addEventListener('click', () => handlers.onTogglePin?.(practice.id, !practice.pinned));
+    tools.appendChild(pin);
+  }
 
   const del = el('button', 'btn-text', '刪除這筆');
   del.type = 'button';
