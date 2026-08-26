@@ -6,11 +6,12 @@
  * Gemini 的呼叫完全不碰：AI 檢查本來就需要連網，快取只會拿到過期的答案。
  */
 
-const CACHE_NAME = 'three-rounds-v1';
+const CACHE_NAME = 'three-rounds-v2';
 
 const SHELL = [
   './',
   'index.html',
+  'diag.html',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',

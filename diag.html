@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>語音辨識診斷</title>
+<link rel="stylesheet" href="src/styles.css">
+<style>
+  .app-main { padding: 16px; }
+  .diag-btn { display: block; width: 100%; margin-bottom: 8px; }
+  #log {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: var(--card);
+    border: 1px solid var(--secondary);
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 55vh;
+    overflow-y: auto;
+  }
+</style>
+</head>
+<body>
+<header class="app-bar">
+  <h1 class="app-title">語音辨識診斷</h1>
+</header>
+
+<main class="app-main">
+  <p class="hint">
+    每個測試按下去之後，<strong>大聲講一句話</strong>（例如「今天天氣很好我出門散步」），
+    講完等它自己停（10 秒）。三個測試都跑完，再按最下面的複製按鈕。
+  </p>
+
+  <button type="button" class="btn diag-btn" id="t1">測試 1：只辨識，不錄音</button>
+  <button type="button" class="btn diag-btn" id="t2">測試 2：先錄音再辨識（目前 APP 的做法）</button>
+  <button type="button" class="btn diag-btn" id="t3">測試 3：先辨識再錄音</button>
+  <button type="button" class="btn diag-btn" id="stop">提早停止</button>
+
+  <div class="card">
+    <div id="log">按上面任一個測試開始。</div>
+  </div>
+
+  <button type="button" class="btn btn-primary diag-btn" id="copy">複製全部紀錄</button>
+  <button type="button" class="btn diag-btn" id="clear">清空紀錄</button>
+  <p class="hint"><a href="./">← 回到練習</a></p>
+</main>
+
+<script>
+/*
+ * 這一頁只做診斷，不碰任何練習資料。
+ * 刻意不用 import，就算主程式壞掉這一頁也打得開。
+ */
+const logBox = document.getElementById('log');
+const lines = [];
+let t0 = Date.now();
+
+function log(text) {
+  const ms = String(Date.now() - t0).padStart(5, ' ');
+  const line = `${ms}ms  ${text}`;
+  lines.push(line);
+  logBox.textContent = lines.join('\n');
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+function env() {
+  const standalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  log('── 環境 ──');
+  log(`UA: ${navigator.userAgent}`);
+  log(`安全連線: ${window.isSecureContext}`);
+  log(`有沒有網路: ${navigator.onLine}`);
+  log(`從桌面圖示開啟(standalone): ${standalone}`);
+  log(`SpeechRecognition: ${SR ? '有' : '沒有'}`);
+  log(`MediaRecorder: ${window.MediaRecorder ? '有' : '沒有'}`);
+  log(`getUserMedia: ${navigator.mediaDevices?.getUserMedia ? '有' : '沒有'}`);
+  log(`語系: ${navigator.language} / ${(navigator.languages || []).join(',')}`);
+}
+
+let recognition = null;
+let recorder = null;
+let stream = null;
+let autoStopId = null;
+let finals = [];
+
+function makeRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    log('!! 這台裝置沒有 SpeechRecognition，測不下去');
+    return null;
+  }
+  const r = new SR();
+  r.lang = 'zh-TW';
+  r.continuous = true;
+  r.interimResults = true;
+
+  r.onstart = () => log('辨識 onstart');
+  r.onaudiostart = () => log('辨識 onaudiostart（開始收音）');
+  r.onsoundstart = () => log('辨識 onsoundstart（聽到聲響）');
+  r.onspeechstart = () => log('辨識 onspeechstart（judge 這是人聲）');
+  r.onspeechend = () => log('辨識 onspeechend');
+  r.onsoundend = () => log('辨識 onsoundend');
+  r.onaudioend = () => log('辨識 onaudioend（停止收音）');
+  r.onnomatch = () => log('辨識 onnomatch（聽到了但認不出來）');
+  r.onresult = (e) => {
+    const from = typeof e.resultIndex === 'number' ? e.resultIndex : 0;
+    for (let i = from; i < e.results.length; i += 1) {
+      const res = e.results[i];
+      const text = res[0] ? res[0].transcript : '';
+      if (res.isFinal) {
+        finals.push(text);
+        log(`辨識 onresult [確定] "${text}"`);
+      } else {
+        log(`辨識 onresult [暫時] "${text}"`);
+      }
+    }
+  };
+  r.onerror = (e) => log(`辨識 onerror >>> ${e.error} <<< ${e.message || ''}`);
+  r.onend = () => log('辨識 onend');
+  return r;
+}
+
+async function startRecorder() {
+  try {
+    log('要求麥克風權限（getUserMedia）…');
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    log('getUserMedia 成功，拿到音訊軌道 ' + stream.getTracks().length + ' 條');
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => log(`錄音 ondataavailable ${e.data.size} bytes`);
+    recorder.onerror = (e) => log(`錄音 onerror >>> ${e.error && e.error.name} <<<`);
+    recorder.start();
+    log(`錄音已開始，格式 ${recorder.mimeType}`);
+  } catch (err) {
+    log(`getUserMedia 失敗 >>> ${err.name} <<< ${err.message}`);
+  }
+}
+
+function startRecognition() {
+  recognition = makeRecognition();
+  if (!recognition) return;
+  try {
+    recognition.start();
+    log('已呼叫 recognition.start()');
+  } catch (err) {
+    log(`recognition.start() 丟出例外 >>> ${err.name} <<< ${err.message}`);
+  }
+}
+
+function stopAll() {
+  clearTimeout(autoStopId);
+  if (recognition) {
+    try { recognition.stop(); } catch (e) { log('recognition.stop() 例外 ' + e.name); }
+  }
+  if (recorder && recorder.state !== 'inactive') {
+    try { recorder.stop(); } catch (e) { log('recorder.stop() 例外 ' + e.name); }
+  }
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+  }
+  setTimeout(() => {
+    const text = finals.join('');
+    log(`── 結果：逐字稿 ${text.length} 字 ──`);
+    log(text ? `"${text}"` : '（空的）');
+    log('');
+    recognition = null;
+    recorder = null;
+  }, 600);
+}
+
+function beginTest(name, run) {
+  stopAll();
+  setTimeout(async () => {
+    t0 = Date.now();
+    finals = [];
+    log('');
+    log(`══════ ${name} ══════`);
+    env();
+    log('── 開始，請現在講話 ──');
+    await run();
+    autoStopId = setTimeout(() => {
+      log('── 10 秒到，自動停止 ──');
+      stopAll();
+    }, 10000);
+  }, 300);
+}
+
+document.getElementById('t1').onclick = () =>
+  beginTest('測試 1：只辨識，不錄音', async () => {
+    startRecognition();
+  });
+
+document.getElementById('t2').onclick = () =>
+  beginTest('測試 2：先錄音再辨識（目前 APP 的做法）', async () => {
+    await startRecorder();
+    startRecognition();
+  });
+
+document.getElementById('t3').onclick = () =>
+  beginTest('測試 3：先辨識再錄音', async () => {
+    startRecognition();
+    await new Promise((r) => setTimeout(r, 800));
+    await startRecorder();
+  });
+
+document.getElementById('stop').onclick = () => {
+  log('── 手動停止 ──');
+  stopAll();
+};
+
+document.getElementById('copy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'));
+    alert('已複製，貼到對話裡給我看');
+  } catch {
+    alert('複製失敗，請直接長按上面的紀錄選取複製');
+  }
+};
+
+document.getElementById('clear').onclick = () => {
+  lines.length = 0;
+  logBox.textContent = '已清空。';
+};
+
+env();
+</script>
+</body>
+</html>

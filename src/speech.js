@@ -12,13 +12,21 @@ const NOTICES = {
   unsupported: '這個瀏覽器不支援語音辨識，這一遍只會留下錄音。停止後可以自己把內容打上去。',
   network: '辨識過程沒有連上網路，這一遍的逐字稿是空的。停止後可以自己把內容補上。',
   'not-allowed': '沒有麥克風權限，這一遍無法辨識。停止後可以自己把內容補上。',
+  'service-not-allowed': '瀏覽器擋掉了語音辨識服務，這一遍的逐字稿是空的。停止後可以自己把內容補上。',
+  'audio-capture': '辨識抓不到麥克風，可能是被錄音佔住了。這一遍的逐字稿是空的，可以自己把內容補上。',
+  'language-not-supported': '這台裝置沒有中文辨識，這一遍的逐字稿是空的。停止後可以自己把內容補上。',
+  aborted: '辨識被中斷了，這一遍的逐字稿是空的。可以自己把內容補上。',
   'no-speech': '沒有聽到聲音，這一遍的逐字稿是空的。停止後可以自己把內容補上。',
   failed: '辨識中斷，這一遍的逐字稿可能不完整。可以自己把內容補上。',
 };
 
-/** 給畫面用的降級提示文字 */
+/**
+ * 給畫面用的降級提示文字。
+ * 後面附上原始代碼——第一版還在抓問題，出事時看得到代碼才查得下去。
+ */
 export function fallbackNotice(reason) {
-  return NOTICES[reason] || NOTICES.failed;
+  const text = NOTICES[reason] || NOTICES.failed;
+  return reason && reason !== 'unsupported' ? `${text}（代碼：${reason}）` : text;
 }
 
 function resolveConstructor(options) {

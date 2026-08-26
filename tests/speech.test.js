@@ -117,7 +117,26 @@ describe('T08 語音辨識模組', () => {
   it('沒有麥克風權限的提示與斷網不同', () => {
     expect(fallbackNotice('not-allowed')).toContain('權限');
     expect(fallbackNotice('network')).toContain('網路');
-    expect(fallbackNotice('看不懂的代碼')).toBe(fallbackNotice('failed'));
+  });
+
+  it('麥克風被錄音佔住有專屬提示', () => {
+    expect(fallbackNotice('audio-capture')).toContain('抓不到麥克風');
+    expect(fallbackNotice('service-not-allowed')).toContain('語音辨識服務');
+    expect(fallbackNotice('language-not-supported')).toContain('中文辨識');
+    expect(fallbackNotice('aborted')).toContain('中斷');
+  });
+
+  it('提示後面附上原始代碼，出事時查得下去', () => {
+    expect(fallbackNotice('audio-capture')).toContain('（代碼：audio-capture）');
+    expect(fallbackNotice('network')).toContain('（代碼：network）');
+    // 不支援是裝置本身的事，沒有代碼可附
+    expect(fallbackNotice('unsupported')).not.toContain('代碼');
+  });
+
+  it('沒看過的代碼用通用訊息，但代碼還是要印出來', () => {
+    const notice = fallbackNotice('看不懂的代碼');
+    expect(notice).toContain('辨識中斷');
+    expect(notice).toContain('（代碼：看不懂的代碼）');
   });
 
   it('沒有開始就停止不會報錯', async () => {
