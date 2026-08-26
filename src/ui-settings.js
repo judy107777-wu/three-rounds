@@ -6,6 +6,8 @@
  * 金鑰只存在這台裝置的瀏覽器裡，不會進原始碼、不會上傳。
  */
 
+import { GEMINI_MODEL } from './ai-review.js';
+
 const KEY_STORAGE = 'stt.gemini-key';
 
 function store() {
@@ -38,6 +40,45 @@ export function clearApiKey() {
 
 export function hasApiKey() {
   return getApiKey() !== '';
+}
+
+/**
+ * 把離線快取與 service worker 全部清掉再重新載入。
+ * 練習紀錄存在 IndexedDB，這裡完全不動它。
+ * 相依項目可以注入，方便測試。
+ */
+export async function hardRefresh({
+  serviceWorker = globalThis.navigator && globalThis.navigator.serviceWorker,
+  cacheStorage = globalThis.caches,
+  reload = () => globalThis.location.reload(),
+} = {}) {
+  try {
+    if (serviceWorker && serviceWorker.getRegistrations) {
+      const regs = await serviceWorker.getRegistrations();
+      for (const reg of regs) await reg.unregister();
+    }
+  } catch {
+    // 沒有就算了，重新載入本身就有機會拿到新版
+  }
+  try {
+    if (cacheStorage && cacheStorage.keys) {
+      const keys = await cacheStorage.keys();
+      for (const key of keys) await cacheStorage.delete(key);
+    }
+  } catch {
+    // 同上
+  }
+  reload();
+}
+
+/** 現在實際生效的快取版本。顯示真實狀態，不是寫死的版號 */
+export async function currentCacheName(cacheStorage = globalThis.caches) {
+  try {
+    const keys = await cacheStorage.keys();
+    return keys[0] || '（沒有離線快取）';
+  } catch {
+    return '（讀不到）';
+  }
 }
 
 function el(tag, className, text) {
@@ -115,6 +156,29 @@ export function renderSettings(container, handlers = {}) {
   card.appendChild(clearBtn);
 
   container.appendChild(card);
+
+  // 版本資訊。改版之後手機常常還吃著舊檔案，
+  // 這裡直接把「現在跑的是哪一版」攤開來，不用猜。
+  const infoCard = el('div', 'card');
+  infoCard.appendChild(el('h2', 'card-title', '版本'));
+  const modelLine = el('p', 'hint', `目前模型：${GEMINI_MODEL}`);
+  modelLine.id = 'settings-model';
+  infoCard.appendChild(modelLine);
+
+  const cacheLine = el('p', 'hint', '離線快取：讀取中…');
+  cacheLine.id = 'settings-cache';
+  infoCard.appendChild(cacheLine);
+  (handlers.readCacheName || currentCacheName)().then((name) => {
+    cacheLine.textContent = `離線快取：${name}`;
+  });
+
+  const refreshBtn = el('button', 'btn', '強制更新到最新版');
+  refreshBtn.type = 'button';
+  refreshBtn.id = 'settings-refresh';
+  refreshBtn.addEventListener('click', () => (handlers.onHardRefresh || hardRefresh)());
+  infoCard.appendChild(refreshBtn);
+  infoCard.appendChild(el('p', 'hint', '清掉離線快取再重新載入。練習紀錄不會被清掉。'));
+  container.appendChild(infoCard);
 
   const exportCard = el('div', 'card');
   exportCard.appendChild(el('h2', 'card-title', '匯出'));

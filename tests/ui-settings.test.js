@@ -5,8 +5,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  getApiKey, setApiKey, clearApiKey, hasApiKey, renderSettings,
+  getApiKey, setApiKey, clearApiKey, hasApiKey, renderSettings, hardRefresh, currentCacheName,
 } from '../src/ui-settings.js';
+import { GEMINI_MODEL } from '../src/ai-review.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -117,6 +118,65 @@ describe('T12 設定頁與金鑰保存', () => {
     box.querySelector('#settings-test').click();
     await new Promise((r) => setTimeout(r, 0));
     expect(onTest).toHaveBeenCalledWith('SAVED-KEY');
+  });
+
+  it('設定頁把現在跑的模型顯示出來，改版有沒有生效一眼就看得到', () => {
+    const box = mount();
+    renderSettings(box, { readCacheName: () => Promise.resolve('three-rounds-v6') });
+    expect(box.querySelector('#settings-model').textContent).toContain(GEMINI_MODEL);
+  });
+
+  it('設定頁顯示實際生效的離線快取版本', async () => {
+    const box = mount();
+    renderSettings(box, { readCacheName: () => Promise.resolve('three-rounds-v6') });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(box.querySelector('#settings-cache').textContent).toContain('three-rounds-v6');
+  });
+
+  it('強制更新會註銷 service worker、清掉快取，然後重新載入', async () => {
+    const unregister = vi.fn(() => Promise.resolve(true));
+    const del = vi.fn(() => Promise.resolve(true));
+    const reload = vi.fn();
+    await hardRefresh({
+      serviceWorker: { getRegistrations: () => Promise.resolve([{ unregister }, { unregister }]) },
+      cacheStorage: { keys: () => Promise.resolve(['three-rounds-v5', 'three-rounds-v4']), delete: del },
+      reload,
+    });
+    expect(unregister).toHaveBeenCalledTimes(2);
+    expect(del).toHaveBeenCalledTimes(2);
+    expect(del).toHaveBeenCalledWith('three-rounds-v5');
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('強制更新不會碰到練習紀錄，也不會清掉金鑰', async () => {
+    setApiKey('KEEP-ME');
+    const reload = vi.fn();
+    await hardRefresh({
+      serviceWorker: { getRegistrations: () => Promise.resolve([]) },
+      cacheStorage: { keys: () => Promise.resolve([]), delete: vi.fn() },
+      reload,
+    });
+    expect(getApiKey()).toBe('KEEP-ME');
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('沒有 service worker 或快取時，強制更新照樣重新載入不報錯', async () => {
+    const reload = vi.fn();
+    await hardRefresh({ serviceWorker: undefined, cacheStorage: undefined, reload });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('設定頁的強制更新按鈕會被呼叫', () => {
+    const onHardRefresh = vi.fn();
+    const box = mount();
+    renderSettings(box, { onHardRefresh, readCacheName: () => Promise.resolve('x') });
+    box.querySelector('#settings-refresh').click();
+    expect(onHardRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('讀不到快取名稱時不炸掉', async () => {
+    expect(await currentCacheName({ keys: () => Promise.reject(new Error('nope')) })).toBe('（讀不到）');
+    expect(await currentCacheName({ keys: () => Promise.resolve([]) })).toContain('沒有');
   });
 
   it('金鑰不出現在原始碼中', () => {

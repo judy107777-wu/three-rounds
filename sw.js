@@ -6,7 +6,7 @@
  * Gemini 的呼叫完全不碰：AI 檢查本來就需要連網，快取只會拿到過期的答案。
  */
 
-const CACHE_NAME = 'three-rounds-v5';
+const CACHE_NAME = 'three-rounds-v6';
 
 const SHELL = [
   './',
@@ -56,7 +56,12 @@ self.addEventListener('activate', (event) => {
  */
 async function networkFirst(request) {
   try {
-    const response = await fetch(request);
+    // 加上 no-cache：不然瀏覽器自己那層 HTTP 快取還是會給舊檔案。
+    // GitHub Pages 預設讓檔案在瀏覽器裡放 10 分鐘，改版後會拿到舊的。
+    const response = await fetch(new Request(request.url, {
+      cache: 'no-cache',
+      credentials: 'same-origin',
+    }));
     if (response && response.ok && response.type === 'basic') {
       const copy = response.clone();
       caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));

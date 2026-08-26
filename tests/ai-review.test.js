@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  buildPrompt, parseReviewText, requestReview, testApiKey, reviewErrorMessage,
+  buildPrompt, parseReviewText, requestReview, testApiKey, looksLikeApiKey, reviewErrorMessage,
   PROMPT_CONSTRAINTS, REVIEW_SECTIONS, MAX_RESCUE_ITEMS, MAX_REPLY_CHARS,
   GEMINI_MODEL, GEMINI_ENDPOINT,
 } from '../src/ai-review.js';
@@ -346,6 +346,37 @@ describe('T13 AI 檢查模組：測試金鑰', () => {
     expect(result.code).toBe('apikey');
     expect(result.message).toContain('HTTP 403');
     expect(result.usableModels).toBeUndefined();
+  });
+
+  it('認得出 AI Studio 金鑰的格式', () => {
+    expect(looksLikeApiKey('AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q')).toBe(true);
+    // OAuth 權杖不是 API 金鑰
+    expect(looksLikeApiKey('AQ.Ab8RN6INacYS_bURaGhLcLtrVRmetLuYdcTnq')).toBe(false);
+    expect(looksLikeApiKey('')).toBe(false);
+    expect(looksLikeApiKey('AIza-太短')).toBe(false);
+  });
+
+  it('金鑰格式不對時，除了原始錯誤還會告訴使用者去哪裡拿正確的金鑰', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: { message: 'not found' } }) }),
+    );
+    const result = await testApiKey({ apiKey: 'AQ.Ab8RN6INacYS', fetch: fetchMock, online: true });
+    expect(result.badKeyFormat).toBe(true);
+    expect(result.message).toContain('AIza 開頭');
+    expect(result.message).toContain('aistudio.google.com/apikey');
+  });
+
+  it('金鑰格式正確時不會多嘴', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: false, status: 429, json: () => Promise.resolve({ error: { message: 'quota' } }) }),
+    );
+    const result = await testApiKey({
+      apiKey: 'AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q',
+      fetch: fetchMock,
+      online: true,
+    });
+    expect(result.badKeyFormat).toBeUndefined();
+    expect(result.message).not.toContain('AIza 開頭');
   });
 
   it('沒有金鑰就不連外', async () => {

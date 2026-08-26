@@ -284,6 +284,17 @@ export async function requestReview(options = {}) {
 const MODELS_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 /**
+ * AI Studio 發的金鑰一律是 AIza 開頭。
+ * 不硬性擋下來（格式以後可能會變），但可以在出錯時多講一句。
+ */
+export function looksLikeApiKey(key) {
+  return /^AIza[0-9A-Za-z_-]{20,}$/.test(String(key || '').trim());
+}
+
+const KEY_FORMAT_HINT =
+  ' 另外，這串不像 AI Studio 的金鑰——正常是 AIza 開頭的 39 個字。請到 aistudio.google.com/apikey 按 Create API key 重新拿一把。';
+
+/**
  * 問 Gemini 這把金鑰現在能用哪些模型。
  * 模型會被下架（2.5 Flash 就是這樣沒的），失敗時直接把可用清單講出來，
  * 比讓人回頭查文件快得多。查不到就回空字串，不影響原本的錯誤訊息。
@@ -345,6 +356,10 @@ export async function testApiKey(options = {}) {
     if (usable) {
       result.usableModels = usable;
       result.message += ` 這把金鑰目前可用的模型：${usable}`;
+    }
+    if (!looksLikeApiKey(apiKey)) {
+      result.badKeyFormat = true;
+      result.message += KEY_FORMAT_HINT;
     }
     return result;
   }
