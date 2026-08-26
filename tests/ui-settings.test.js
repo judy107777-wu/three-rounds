@@ -83,6 +83,42 @@ describe('T12 設定頁與金鑰保存', () => {
     expect(onExport).toHaveBeenCalledTimes(1);
   });
 
+  it('設定頁可以直接測金鑰，成功時顯示結果', async () => {
+    const onTest = vi.fn(() => Promise.resolve({ ok: true, message: '金鑰可以用（gemini-2.5-flash）' }));
+    const box = mount();
+    renderSettings(box, { onTest });
+    box.querySelector('#settings-api-key').value = 'KEY';
+    box.querySelector('#settings-test').click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onTest).toHaveBeenCalledWith('KEY');
+    const result = box.querySelector('#settings-test-result');
+    expect(result.textContent).toContain('可以用');
+    expect(result.className).toBe('hint');
+  });
+
+  it('測金鑰失敗時用醒目的樣式顯示原因', async () => {
+    const onTest = vi.fn(() => Promise.resolve({ ok: false, message: '金鑰被拒絕了（HTTP 400｜API key not valid）' }));
+    const box = mount();
+    renderSettings(box, { onTest });
+    box.querySelector('#settings-api-key').value = 'BAD';
+    box.querySelector('#settings-test').click();
+    await new Promise((r) => setTimeout(r, 0));
+    const result = box.querySelector('#settings-test-result');
+    expect(result.textContent).toContain('API key not valid');
+    expect(result.className).toBe('notice');
+  });
+
+  it('輸入框空白時測的是已經存起來的那把金鑰', async () => {
+    setApiKey('SAVED-KEY');
+    const onTest = vi.fn(() => Promise.resolve({ ok: true, message: 'ok' }));
+    const box = mount();
+    renderSettings(box, { onTest });
+    box.querySelector('#settings-api-key').value = '';
+    box.querySelector('#settings-test').click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onTest).toHaveBeenCalledWith('SAVED-KEY');
+  });
+
   it('金鑰不出現在原始碼中', () => {
     const files = readdirSync(resolve(root, 'src')).filter((f) => f.endsWith('.js'));
     expect(files.length).toBeGreaterThan(0);

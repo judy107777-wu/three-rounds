@@ -83,12 +83,32 @@ export function renderSettings(container, handlers = {}) {
   });
   card.appendChild(saveBtn);
 
+  // 先驗金鑰，不用等講完三遍才知道它是壞的
+  const testBtn = el('button', 'btn', '測試金鑰');
+  testBtn.type = 'button';
+  testBtn.id = 'settings-test';
+  const testResult = el('p', 'hint');
+  testResult.id = 'settings-test-result';
+  testBtn.addEventListener('click', async () => {
+    if (!handlers.onTest) return;
+    testBtn.disabled = true;
+    testResult.className = 'hint';
+    testResult.textContent = '測試中…';
+    const result = await handlers.onTest(input.value.trim() || getApiKey());
+    testBtn.disabled = false;
+    testResult.className = result.ok ? 'hint' : 'notice';
+    testResult.textContent = result.message;
+  });
+  card.appendChild(testBtn);
+  card.appendChild(testResult);
+
   const clearBtn = el('button', 'btn-text', '清除金鑰');
   clearBtn.type = 'button';
   clearBtn.id = 'settings-clear';
   clearBtn.addEventListener('click', () => {
     clearApiKey();
     input.value = '';
+    testResult.textContent = '';
     handlers.onToast?.('已清除金鑰');
     handlers.onSaved?.('');
   });

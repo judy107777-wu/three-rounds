@@ -50,6 +50,38 @@ export function reviewErrorMessage(code) {
   return ERROR_MESSAGES[code] || ERROR_MESSAGES.failed;
 }
 
+/** Gemini 回的錯誤訊息可能很長，截一段就夠看出原因 */
+function trim(text, max = 200) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+/**
+ * 組一個失敗結果。
+ * 把 HTTP 狀態與 Gemini 自己說的原因一起帶出來——
+ * 只給一句「檢查失敗」等於什麼都沒說，查不下去。
+ */
+function failure(code, { status = null, detail = '' } = {}) {
+  const extra = [];
+  if (status) extra.push(`HTTP ${status}`);
+  if (detail) extra.push(trim(detail));
+  const message = extra.length
+    ? `${reviewErrorMessage(code)}（${extra.join('｜')}）`
+    : reviewErrorMessage(code);
+  return { ok: false, code, status, detail: detail ? trim(detail) : null, message };
+}
+
+/** 從 Gemini 的錯誤主體挖出它自己寫的原因 */
+async function readErrorDetail(response) {
+  if (!response || typeof response.json !== 'function') return '';
+  try {
+    const body = await response.json();
+    return (body && body.error && body.error.message) || '';
+  } catch {
+    return '';
+  }
+}
+
 const OUTPUT_SPEC = `請只輸出以下四項，順序固定，不得增減：
 1. 該救回的：第 1 或第 2 遍講過、但第 3 遍消失的重點。上限 ${MAX_RESCUE_ITEMS} 項，每項附一句理由。
 2. 該刪但還留著的：第 3 遍中仍屬鋪陳、重複或空話的句子。
@@ -57,23 +89,25 @@ const OUTPUT_SPEC = `請只輸出以下四項，順序固定，不得增減：
 4. 結論位置：第 3 遍的第一句是不是結論。不是的話，指出哪一句該提前。`;
 
 const RESPONSE_SCHEMA = {
-  type: 'object',
+  // 型別名稱用大寫。Gemini 的 responseSchema 是 OpenAPI 子集，
+  // 文件寫的就是 OBJECT／ARRAY／STRING，小寫有可能被退件。
+  type: 'OBJECT',
   properties: {
     rescue: {
-      type: 'array',
+      type: 'ARRAY',
       items: {
-        type: 'object',
-        properties: { point: { type: 'string' }, reason: { type: 'string' } },
+        type: 'OBJECT',
+        properties: { point: { type: 'STRING' }, reason: { type: 'STRING' } },
         required: ['point', 'reason'],
       },
     },
-    cut: { type: 'array', items: { type: 'string' } },
-    newContent: { type: 'array', items: { type: 'string' } },
+    cut: { type: 'ARRAY', items: { type: 'STRING' } },
+    newContent: { type: 'ARRAY', items: { type: 'STRING' } },
     conclusion: {
-      type: 'object',
+      type: 'OBJECT',
       properties: {
-        isFirstSentence: { type: 'boolean' },
-        note: { type: 'string' },
+        isFirstSentence: { type: 'BOOLEAN' },
+        note: { type: 'STRING' },
       },
       required: ['isFirstSentence', 'note'],
     },
@@ -187,13 +221,13 @@ export async function requestReview(options = {}) {
   const online = options.online !== undefined ? options.online : globalThis.navigator?.onLine !== false;
 
   if (!apiKey.trim()) {
-    return { ok: false, code: 'no-key', message: reviewErrorMessage('no-key') };
+    return failure('no-key');
   }
   if (!online) {
-    return { ok: false, code: 'offline', message: reviewErrorMessage('offline') };
+    return failure('offline');
   }
   if (typeof doFetch !== 'function') {
-    return { ok: false, code: 'failed', message: reviewErrorMessage('failed') };
+    return failure('failed');
   }
 
   const prompt = buildPrompt(rounds);
@@ -216,25 +250,71 @@ export async function requestReview(options = {}) {
         },
       }),
     });
-  } catch {
-    return { ok: false, code: 'network', message: reviewErrorMessage('network') };
+  } catch (err) {
+    return failure('network', { detail: err && err.message });
   }
 
   if (!response || !response.ok) {
-    const code = statusToCode(response ? response.status : 0);
-    return { ok: false, code, message: reviewErrorMessage(code) };
+    const status = response ? response.status : 0;
+    const detail = await readErrorDetail(response);
+    return failure(statusToCode(status), { status, detail });
   }
 
   let body;
   try {
     body = await response.json();
   } catch {
-    return { ok: false, code: 'bad-response', message: reviewErrorMessage('bad-response') };
+    return failure('bad-response', { status: response.status });
   }
 
-  const review = parseReviewText(extractText(body));
+  const text = extractText(body);
+  const review = parseReviewText(text);
   if (!review) {
-    return { ok: false, code: 'bad-response', message: reviewErrorMessage('bad-response') };
+    // 常見於被安全設定擋下或講到一半被截斷，把原因一起帶出來
+    const finish = body?.candidates?.[0]?.finishReason;
+    const blocked = body?.promptFeedback?.blockReason;
+    const detail = [blocked && `blockReason=${blocked}`, finish && `finishReason=${finish}`, trim(text, 80)]
+      .filter(Boolean)
+      .join(' ');
+    return failure('bad-response', { status: response.status, detail });
   }
   return { ok: true, review };
+}
+
+/**
+ * 只確認金鑰通不通，不做完整檢查。
+ * 讓使用者在設定頁就能驗，不用先講完三遍才知道金鑰是壞的。
+ */
+export async function testApiKey(options = {}) {
+  const { apiKey = '', signal } = options;
+  const doFetch = options.fetch || globalThis.fetch;
+  const online = options.online !== undefined ? options.online : globalThis.navigator?.onLine !== false;
+
+  if (!apiKey.trim()) return failure('no-key');
+  if (!online) return failure('offline');
+  if (typeof doFetch !== 'function') return failure('failed');
+
+  let response;
+  try {
+    response = await doFetch(GEMINI_ENDPOINT, {
+      method: 'POST',
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey.trim(),
+      },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: '回覆「OK」兩個字就好。' }] }],
+      }),
+    });
+  } catch (err) {
+    return failure('network', { detail: err && err.message });
+  }
+
+  if (!response || !response.ok) {
+    const status = response ? response.status : 0;
+    const detail = await readErrorDetail(response);
+    return failure(statusToCode(status), { status, detail });
+  }
+  return { ok: true, message: `金鑰可以用（${GEMINI_MODEL}）` };
 }

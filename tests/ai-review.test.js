@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  buildPrompt, parseReviewText, requestReview, reviewErrorMessage,
+  buildPrompt, parseReviewText, requestReview, testApiKey, reviewErrorMessage,
   PROMPT_CONSTRAINTS, REVIEW_SECTIONS, MAX_RESCUE_ITEMS, MAX_REPLY_CHARS,
   GEMINI_MODEL, GEMINI_ENDPOINT,
 } from '../src/ai-review.js';
@@ -218,10 +218,110 @@ describe('T13 AI 檢查模組：呼叫與錯誤處理', () => {
     expect(result.code).toBe('bad-response');
   });
 
+  it('回傳格式的型別名稱用大寫，符合 Gemini 的 responseSchema', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(GOOD_REVIEW)));
+    await requestReview({ rounds: ROUNDS, apiKey: 'KEY', fetch: fetchMock, online: true });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const schema = body.generationConfig.responseSchema;
+    expect(schema.type).toBe('OBJECT');
+    expect(schema.properties.cut.type).toBe('ARRAY');
+    expect(schema.properties.cut.items.type).toBe('STRING');
+    expect(schema.properties.conclusion.properties.isFirstSentence.type).toBe('BOOLEAN');
+  });
+
+  it('失敗時把 HTTP 狀態與 Gemini 自己說的原因一起帶出來', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ error: { code: 404, message: 'models/gemini-2.5-flash is not found' } }),
+      }),
+    );
+    const result = await requestReview({ rounds: ROUNDS, apiKey: 'KEY', fetch: fetchMock, online: true });
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(404);
+    expect(result.detail).toContain('not found');
+    expect(result.message).toContain('HTTP 404');
+    expect(result.message).toContain('not found');
+  });
+
+  it('錯誤主體讀不出來也不會炸掉，至少留下狀態碼', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, status: 503 }));
+    const result = await requestReview({ rounds: ROUNDS, apiKey: 'KEY', fetch: fetchMock, online: true });
+    expect(result.code).toBe('failed');
+    expect(result.message).toContain('HTTP 503');
+  });
+
+  it('被安全設定擋下時，把 blockReason 帶出來', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ promptFeedback: { blockReason: 'SAFETY' }, candidates: [] }),
+      }),
+    );
+    const result = await requestReview({ rounds: ROUNDS, apiKey: 'KEY', fetch: fetchMock, online: true });
+    expect(result.code).toBe('bad-response');
+    expect(result.message).toContain('SAFETY');
+  });
+
   it('每個錯誤碼都有給使用者看的話', () => {
     for (const code of ['no-key', 'offline', 'network', 'apikey', 'rate-limit', 'bad-response', 'failed']) {
       expect(reviewErrorMessage(code), code).toBeTruthy();
     }
     expect(reviewErrorMessage('沒看過的碼')).toBe(reviewErrorMessage('failed'));
+  });
+});
+
+describe('T13 AI 檢查模組：測試金鑰', () => {
+  it('金鑰可用時回報成功，而且不需要先講完三遍', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+    );
+    const result = await testApiKey({ apiKey: 'KEY', fetch: fetchMock, online: true });
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain('可以用');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('測試金鑰同樣把金鑰放標頭，不放網址', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+    );
+    await testApiKey({ apiKey: 'SECRET-KEY', fetch: fetchMock, online: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).not.toContain('SECRET-KEY');
+    expect(init.headers['x-goog-api-key']).toBe('SECRET-KEY');
+  });
+
+  it('金鑰壞掉時把 Gemini 說的原因原封不動帶出來', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: { message: 'API key not valid. Please pass a valid API key.' } }),
+      }),
+    );
+    const result = await testApiKey({ apiKey: 'BAD', fetch: fetchMock, online: true });
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('API key not valid');
+    expect(result.message).toContain('HTTP 400');
+  });
+
+  it('沒有金鑰就不連外', async () => {
+    const fetchMock = vi.fn();
+    const result = await testApiKey({ apiKey: '', fetch: fetchMock, online: true });
+    expect(result.code).toBe('no-key');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('測試金鑰不會送出任何逐字稿', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+    );
+    await testApiKey({ apiKey: 'KEY', fetch: fetchMock, online: true });
+    const body = fetchMock.mock.calls[0][1].body;
+    expect(body).not.toContain(ROUND1.slice(0, 20));
+    expect(body).not.toContain(ROUND3.slice(0, 20));
   });
 });

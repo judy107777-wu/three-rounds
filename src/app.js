@@ -10,7 +10,7 @@ import { renderToday } from './ui-today.js';
 import { renderHistory, renderDetail } from './ui-history.js';
 import { renderSettings, getApiKey } from './ui-settings.js';
 import { renderReview } from './ui-review.js';
-import { requestReview } from './ai-review.js';
+import { requestReview, testApiKey } from './ai-review.js';
 import { exportRoundAudio } from './ui-transcript.js';
 import { exportAll, ExportError } from './export.js';
 import { showToast, formatSeconds } from './ui-common.js';
@@ -245,6 +245,7 @@ const detailHandlers = {
 function drawSettings() {
   renderSettings(views.settings, {
     onToast: (message) => showToast(message),
+    onTest: (key) => testApiKey({ apiKey: key }),
     async onExport() {
       try {
         await exportAll();
