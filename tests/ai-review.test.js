@@ -35,8 +35,8 @@ function jsonResponse(obj, { ok = true, status = 200 } = {}) {
 
 describe('T13 AI 檢查模組：提示詞', () => {
   it('用 Gemini 2.5 Flash', () => {
-    expect(GEMINI_MODEL).toBe('gemini-2.5-flash');
-    expect(GEMINI_ENDPOINT).toContain('gemini-2.5-flash');
+    expect(GEMINI_MODEL).toBe('gemini-3.6-flash');
+    expect(GEMINI_ENDPOINT).toContain('gemini-3.6-flash');
   });
 
   it('固定約束剛好五項', () => {
@@ -306,6 +306,46 @@ describe('T13 AI 檢查模組：測試金鑰', () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain('API key not valid');
     expect(result.message).toContain('HTTP 400');
+  });
+
+  it('模型被下架時，順便告訴使用者現在能用哪些模型', async () => {
+    const fetchMock = vi.fn((url, init) => {
+      if (init.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              models: [
+                { name: 'models/gemini-3.6-flash', supportedGenerationMethods: ['generateContent'] },
+                { name: 'models/gemini-3.6-pro', supportedGenerationMethods: ['generateContent'] },
+                { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+              ],
+            }),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: () =>
+          Promise.resolve({ error: { message: 'This model models/舊模型 is no longer available to new users.' } }),
+      });
+    });
+    const result = await testApiKey({ apiKey: 'KEY', fetch: fetchMock, online: true });
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('no longer available');
+    expect(result.usableModels).toContain('gemini-3.6-flash');
+    expect(result.message).toContain('目前可用的模型');
+    // 只列 flash，不把嵌入模型也倒出來
+    expect(result.message).not.toContain('text-embedding');
+  });
+
+  it('查不到模型清單時不影響原本的錯誤訊息', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, status: 403 }));
+    const result = await testApiKey({ apiKey: 'KEY', fetch: fetchMock, online: true });
+    expect(result.code).toBe('apikey');
+    expect(result.message).toContain('HTTP 403');
+    expect(result.usableModels).toBeUndefined();
   });
 
   it('沒有金鑰就不連外', async () => {

@@ -36,7 +36,7 @@
 | 資料存哪 | 瀏覽器本機資料庫 IndexedDB |
 | 主機部署 | GitHub Pages |
 | 外部服務 | 僅 Gemini API（AI 檢查用） |
-| AI 模型 | Gemini 2.5 Flash |
+| AI 模型 | Gemini 3.6 Flash（原訂 2.5 Flash，2026-08-27 實測已不開放新用戶，API 直接指定改用 3.6 Flash） |
 | 語音轉文字 | 瀏覽器內建 Web Speech API，語言 zh-TW。**練習中不得同時開啟錄音** |
 | 知識怎麼存 | 整包送。每次把三遍逐字稿全部送給 AI，總量約一千餘字，不需要挑段落 |
 | 測試工具 | Vitest |

@@ -6,7 +6,7 @@
  * 這是整個 APP 唯一會連外的地方。
  */
 
-export const GEMINI_MODEL = 'gemini-2.5-flash';
+export const GEMINI_MODEL = 'gemini-3.6-flash';
 export const GEMINI_ENDPOINT =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
@@ -281,6 +281,32 @@ export async function requestReview(options = {}) {
   return { ok: true, review };
 }
 
+const MODELS_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+/**
+ * 問 Gemini 這把金鑰現在能用哪些模型。
+ * 模型會被下架（2.5 Flash 就是這樣沒的），失敗時直接把可用清單講出來，
+ * 比讓人回頭查文件快得多。查不到就回空字串，不影響原本的錯誤訊息。
+ */
+async function listUsableModels(doFetch, apiKey, signal) {
+  try {
+    const response = await doFetch(MODELS_ENDPOINT, {
+      method: 'GET',
+      signal,
+      headers: { 'x-goog-api-key': apiKey },
+    });
+    if (!response || !response.ok || typeof response.json !== 'function') return '';
+    const body = await response.json();
+    const names = (body.models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => String(m.name || '').replace('models/', ''))
+      .filter((n) => n.includes('flash'));
+    return names.length ? names.slice(0, 6).join('、') : '';
+  } catch {
+    return '';
+  }
+}
+
 /**
  * 只確認金鑰通不通，不做完整檢查。
  * 讓使用者在設定頁就能驗，不用先講完三遍才知道金鑰是壞的。
@@ -314,7 +340,13 @@ export async function testApiKey(options = {}) {
   if (!response || !response.ok) {
     const status = response ? response.status : 0;
     const detail = await readErrorDetail(response);
-    return failure(statusToCode(status), { status, detail });
+    const usable = await listUsableModels(doFetch, apiKey.trim(), signal);
+    const result = failure(statusToCode(status), { status, detail });
+    if (usable) {
+      result.usableModels = usable;
+      result.message += ` 這把金鑰目前可用的模型：${usable}`;
+    }
+    return result;
   }
   return { ok: true, message: `金鑰可以用（${GEMINI_MODEL}）` };
 }
