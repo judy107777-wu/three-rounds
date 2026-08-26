@@ -243,6 +243,8 @@ describe('T13 AI 檢查模組：呼叫與錯誤處理', () => {
     expect(result.detail).toContain('not found');
     expect(result.message).toContain('HTTP 404');
     expect(result.message).toContain('not found');
+    // 訊息裡要看得到實際呼叫的模型，才分得出這一頁是新版還是舊版
+    expect(result.message).toContain(GEMINI_MODEL);
   });
 
   it('錯誤主體讀不出來也不會炸掉，至少留下狀態碼', async () => {

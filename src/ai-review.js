@@ -257,7 +257,9 @@ export async function requestReview(options = {}) {
   if (!response || !response.ok) {
     const status = response ? response.status : 0;
     const detail = await readErrorDetail(response);
-    return failure(statusToCode(status), { status, detail });
+    // 把實際呼叫的模型印出來。手機上常常有舊分頁跑著舊程式，
+    // 錯誤訊息裡有模型名稱，就不用猜這一頁到底是新版還是舊版。
+    return failure(statusToCode(status), { status, detail: `模型 ${GEMINI_MODEL}｜${detail}` });
   }
 
   let body;
