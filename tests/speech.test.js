@@ -21,8 +21,15 @@ function makeFakeCtor(store) {
       store.instances.push(this);
     }
     start() {
-      this.started = true;
       store.startCount = (store.startCount || 0) + 1;
+      // 模擬 Android 太快重開時丟 InvalidStateError
+      if (store.failNextStarts > 0) {
+        store.failNextStarts -= 1;
+        const err = new Error('recognition has already started');
+        err.name = 'InvalidStateError';
+        throw err;
+      }
+      this.started = true;
     }
     stop() {
       this.started = false;
@@ -43,6 +50,9 @@ function makeFakeCtor(store) {
     emitFinal(text) {
       this.emit([{ text, isFinal: true }]);
     }
+    emitInterim(text) {
+      this.emit([{ text, isFinal: false }]);
+    }
     emitError(code) {
       if (this.onerror) this.onerror({ error: code });
     }
@@ -59,8 +69,14 @@ describe('合併逐字稿：把重複的部分去掉', () => {
     expect(mergeTranscript('我今天', '我今天想講一篇文章')).toBe('我今天想講一篇文章');
   });
 
-  it('已經含在裡面的段落不會再加一次', () => {
-    expect(mergeTranscript('我今天想講一篇文章', '想講一篇')).toBe('我今天想講一篇文章');
+  it('已經含在裡面的整段不會再加一次', () => {
+    expect(mergeTranscript('我今天想講一篇關於專注力的文章', '想講一篇關於專注力')).toBe('我今天想講一篇關於專注力的文章');
+  });
+
+  it('短的口頭禪重複出現不會被當成重複刪掉', () => {
+    // 講話本來就會一直重複「然後」「就是」，刪掉的話贅詞數會少算
+    expect(mergeTranscript('然後我就去了', '然後')).toBe('然後我就去了然後');
+    expect(mergeTranscript('這個實驗', '這個')).toBe('這個實驗這個');
   });
 
   it('前後交界處重疊的字只留一份', () => {
@@ -198,6 +214,95 @@ describe('T08 語音辨識模組', () => {
     const result = await r.stop();
     expect(result.transcript).toBe('第一句第二句第三句第四句');
     expect(r.restarts).toBe(4);
+  });
+
+  it('自己結束時還沒定案的那半句不會被丟掉', async () => {
+    // 這是實機逐字稿少一半的主因：Android 講完一句就自己結束，
+    // 結束當下正在辨識中的半句只存在暫時結果裡
+    const store = {};
+    const r = createRecognizer({ SpeechRecognition: makeFakeCtor(store), restartDelay: 0 });
+    r.start();
+    store.instance.emitFinal('這是已經定案的前半句');
+    store.instance.emitInterim('這是還沒定案的後半句');
+    store.instance.endByItself();
+
+    store.instance.emitFinal('重啟之後繼續講的內容');
+    const result = await r.stop();
+    expect(result.transcript).toContain('這是已經定案的前半句');
+    expect(result.transcript).toContain('這是還沒定案的後半句');
+    expect(result.transcript).toContain('重啟之後繼續講的內容');
+  });
+
+  it('每次重啟都用新的辨識實例，不重用舊的', async () => {
+    const store = {};
+    const r = createRecognizer({ SpeechRecognition: makeFakeCtor(store), restartDelay: 0 });
+    r.start();
+    expect(store.instances).toHaveLength(1);
+    store.instance.endByItself();
+    expect(store.instances).toHaveLength(2);
+    store.instance.endByItself();
+    expect(store.instances).toHaveLength(3);
+    await r.stop();
+  });
+
+  it('重啟失敗會稍後再試，不會就此停擺', async () => {
+    // 這是實機第 2 遍只有 35 字/分的主因：
+    // 重啟丟例外之後就再也不辨識，使用者照講但一個字都進不來
+    const store = {};
+    const r = createRecognizer({ SpeechRecognition: makeFakeCtor(store), restartDelay: 0 });
+    r.start();
+    store.instance.emitFinal('停擺之前講的');
+
+    store.failNextStarts = 2; // 前兩次重啟都失敗
+    store.instance.endByItself();
+    expect(r.running).toBe(true); // 還在重試，不能當作結束
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(r.running).toBe(true);
+
+    store.instance.emitFinal('救回來之後繼續講的');
+    const result = await r.stop();
+    expect(result.transcript).toContain('停擺之前講的');
+    expect(result.transcript).toContain('救回來之後繼續講的');
+    expect(result.interrupted).toBe(false);
+  });
+
+  it('重試很多次都失敗才放棄，並且明講逐字稿不完整', async () => {
+    const store = {};
+    const r = createRecognizer({ SpeechRecognition: makeFakeCtor(store), restartDelay: 0 });
+    r.start();
+    store.instance.emitFinal('中斷之前講的內容');
+
+    store.failNextStarts = 99;
+    store.instance.endByItself();
+    for (let i = 0; i < 15; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+
+    const result = await r.stop();
+    expect(result.interrupted).toBe(true);
+    expect(result.transcript).toBe('中斷之前講的內容');
+    // 有內容但不完整，不能默默少一半
+    expect(result.needsManualEntry).toBe(false);
+    expect(result.notice).toContain('不完整');
+    expect(result.notice).toContain('重錄');
+  });
+
+  it('辨識已經死掉時按停止不會卡住', async () => {
+    const store = {};
+    const r = createRecognizer({ SpeechRecognition: makeFakeCtor(store), restartDelay: 0 });
+    r.start();
+    store.instance.emitFinal('講到一半');
+    // 讓 stop() 呼叫 onend 的路斷掉
+    store.instance.onend = null;
+    store.instance.stop = () => {};
+    const result = await Promise.race([
+      r.stop(),
+      new Promise((resolve) => setTimeout(() => resolve('卡住了'), 2500)),
+    ]);
+    expect(result).not.toBe('卡住了');
+    expect(result.transcript).toBe('講到一半');
   });
 
   it('使用者按停止之後就不再自動重啟', async () => {

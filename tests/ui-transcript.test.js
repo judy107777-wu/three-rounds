@@ -64,6 +64,24 @@ describe('T11 逐字稿編輯與補字', () => {
     expect(saved.rounds[0].transcript).toBe('今天講的是專注力這件事');
   });
 
+  it('辨識中途停掉時明講逐字稿不完整，但內容照留', () => {
+    const card = mount(renderRoundCard(roundOf({
+      transcript: '中斷之前講的內容',
+      needsManualEntry: false,
+      interrupted: true,
+      recognitionNotice: '辨識中途停了，這一遍的逐字稿可能不完整。可以按「重錄」重講一次。',
+    })));
+    const notice = card.querySelector('[data-role="interrupted-notice"]');
+    expect(notice).not.toBeNull();
+    expect(notice.textContent).toContain('不完整');
+    expect(card.querySelector('textarea').value).toBe('中斷之前講的內容');
+  });
+
+  it('沒有中斷就不出現那行提示', () => {
+    const card = mount(renderRoundCard(roundOf()));
+    expect(card.querySelector('[data-role="interrupted-notice"]')).toBeNull();
+  });
+
   it('斷網那遍出現補字說明與貼上欄位', () => {
     const card = mount(renderRoundCard(roundOf({ transcript: '', needsManualEntry: true })));
     expect(card.querySelector('[data-role="manual-entry-notice"]')).not.toBeNull();

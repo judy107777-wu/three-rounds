@@ -36,6 +36,9 @@ function buildRound(index, result) {
     seconds,
     transcript,
     needsManualEntry: transcript === '' ? true : !!result.needsManualEntry,
+    // 辨識中途死掉：有內容但一定不完整，要讓使用者看得到
+    interrupted: !!result.interrupted,
+    recognitionNotice: result.notice || null,
     recognitionReason: result.reason || null,
     audio: result.audio || null,
     audioType: result.audioType || null,

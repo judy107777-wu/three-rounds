@@ -123,6 +123,8 @@ const todayHandlers = {
       audioType: null,
       transcript: speech.transcript,
       needsManualEntry: speech.needsManualEntry,
+      interrupted: speech.interrupted,
+      notice: speech.notice,
       reason: speech.reason,
     });
     drawToday();

@@ -65,6 +65,15 @@ export function renderRoundCard(round, options = {}) {
     const notice = el('p', 'notice', round.recognitionNotice || '這一遍沒有取得逐字稿，可以自己把內容補上。');
     notice.dataset.role = 'manual-entry-notice';
     card.appendChild(notice);
+  } else if (round.interrupted) {
+    // 有內容但辨識中途停過，逐字稿一定缺一段，不能默默少一半
+    const notice = el(
+      'p',
+      'notice',
+      round.recognitionNotice || '辨識中途停了，這一遍的逐字稿可能不完整。',
+    );
+    notice.dataset.role = 'interrupted-notice';
+    card.appendChild(notice);
   }
 
   const box = el('textarea', 'transcript');

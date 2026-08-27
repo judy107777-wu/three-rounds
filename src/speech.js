@@ -13,7 +13,14 @@
 export const RECOGNITION_LANG = 'zh-TW';
 
 /** 判定重疊時至少要這麼多字才算數，太短會把正常的重複用字誤刪 */
-const MIN_OVERLAP = 3;
+const MIN_OVERLAP = 4;
+
+/**
+ * 短於這個長度就不當成「已經講過」而丟掉。
+ * 講話本來就會重複「然後」「就是」「這個」，
+ * 把它們當重複刪掉的話，贅詞數會少算，內容也會缺角。
+ */
+const MIN_CONTAINED = 5;
 
 /**
  * 把新的一段文字併進已經有的內容，自動去掉重疊的部分。
@@ -30,7 +37,7 @@ export function mergeTranscript(base, addition) {
   const b = (addition || '').trim();
   if (!b) return a;
   if (!a) return b;
-  if (a.includes(b)) return a; // 這段已經在裡面了
+  if (b.length >= MIN_CONTAINED && a.includes(b)) return a; // 這一整段已經在裡面了
   if (b.startsWith(a)) return b; // 整句重送而且變長，用新的蓋掉舊的
 
   // a 的結尾和 b 的開頭有多長的重疊，就從 b 砍掉多長
@@ -51,6 +58,15 @@ const FATAL_ERRORS = new Set([
 
 /** 自動重啟的上限。一次練習講幾分鐘也用不到這麼多次 */
 const MAX_RESTARTS = 200;
+
+/** 重啟失敗最多再試幾次才放棄。放棄等於這一遍剩下的話全部聽不到，所以給足次數 */
+const MAX_RESTART_FAILURES = 8;
+
+/** 重啟失敗後等多久再試（毫秒）。Android 有時候還沒真的把麥克風放掉 */
+const RESTART_DELAY = 250;
+
+/** 按下停止之後最多等多久 onend。辨識已經死掉時它不會來 */
+const STOP_TIMEOUT = 1500;
 
 const NOTICES = {
   unsupported: '這個瀏覽器不支援語音辨識，這一遍只會留下錄音。停止後可以自己把內容打上去。',
@@ -99,9 +115,15 @@ export function createRecognizer(options = {}) {
   let running = false;
   let stopping = false;
   let restarts = 0;
+  let restartFailures = 0;
+  let restartTimer = null;
+  let interrupted = false;
   let endResolvers = [];
+  const restartDelay = options.restartDelay ?? RESTART_DELAY;
 
   function settleEnd() {
+    clearTimeout(restartTimer);
+    restartTimer = null;
     running = false;
     const list = endResolvers;
     endResolvers = [];
@@ -117,10 +139,16 @@ export function createRecognizer(options = {}) {
     return mergeTranscript(mergeTranscript(committed, segmentText()), interim).trim();
   }
 
-  /** 把這一段的結果收進 committed，準備開下一段 */
+  /**
+   * 把這一段的結果收進 committed，準備開下一段。
+   *
+   * 一定要連 interim 一起收。Android 講完一句就自己結束，
+   * 結束當下還在辨識中的那半句只存在 interim 裡，
+   * 不收就等於每次重啟都丟掉一個句尾。
+   */
   function flushSegment() {
     // 自動重啟之後常常會把剛剛那段再送一次，所以這裡也要合併
-    committed = mergeTranscript(committed, segmentText());
+    committed = mergeTranscript(mergeTranscript(committed, segmentText()), interim);
     finals = [];
     interim = '';
   }
@@ -162,19 +190,48 @@ export function createRecognizer(options = {}) {
     return instance;
   }
 
+  /**
+   * 開一個新的辨識實例。
+   * 每次都用新的，不重用舊的——Android 上太快在同一個實例再呼叫 start()
+   * 會丟 InvalidStateError。
+   */
+  function launch() {
+    recognition = attach(new Ctor());
+    recognition.start();
+  }
+
   function handleEnd() {
     // Android Chrome 不理會 continuous，講完一句就自己結束。
     // 使用者還沒按停止的話，收好這一段再接著聽下去。
     const fatal = FATAL_ERRORS.has(reason);
-    if (!stopping && !fatal && restarts < MAX_RESTARTS) {
-      flushSegment();
-      restarts += 1;
-      try {
-        recognition.start();
-        return;
-      } catch {
-        // 起不來就往下收尾
+    if (stopping || fatal || restarts >= MAX_RESTARTS) {
+      settleEnd();
+      return;
+    }
+
+    flushSegment();
+    restarts += 1;
+    try {
+      launch();
+      restartFailures = 0;
+      return;
+    } catch {
+      // 起不來通常是還沒真的釋放，等一下再試。
+      // 這裡如果直接放棄，接下來使用者講的每一個字都會消失。
+      restartFailures += 1;
+      if (restartFailures <= MAX_RESTART_FAILURES) {
+        restartTimer = setTimeout(() => {
+          if (stopping) return;
+          try {
+            launch();
+            restartFailures = 0;
+          } catch {
+            handleEnd();
+          }
+        }, restartDelay);
+        return; // 還在重試，這一遍還沒結束
       }
+      interrupted = true;
     }
     settleEnd();
   }
@@ -195,9 +252,10 @@ export function createRecognizer(options = {}) {
     reason = null;
     stopping = false;
     restarts = 0;
-    recognition = attach(new Ctor());
+    restartFailures = 0;
+    interrupted = false;
     try {
-      recognition.start();
+      launch();
     } catch {
       reason = 'failed';
       running = false;
@@ -213,9 +271,14 @@ export function createRecognizer(options = {}) {
    */
   async function stop() {
     stopping = true;
+    clearTimeout(restartTimer);
+    restartTimer = null;
     if (running && recognition) {
       await new Promise((resolve) => {
         endResolvers.push(resolve);
+        // 辨識已經死掉時 onend 不會來，不能無限等下去
+        const guard = setTimeout(() => settleEnd(), STOP_TIMEOUT);
+        endResolvers.push(() => clearTimeout(guard));
         try {
           recognition.stop();
         } catch {
@@ -229,11 +292,19 @@ export function createRecognizer(options = {}) {
     const needsManualEntry = transcript === '';
     const finalReason = needsManualEntry ? reason || 'no-speech' : null;
     recognition = null;
+
+    // 有內容但中途died過，逐字稿一定是不完整的，要講出來
+    let notice = needsManualEntry ? fallbackNotice(finalReason) : null;
+    if (!needsManualEntry && interrupted) {
+      notice = '辨識中途停了，這一遍的逐字稿可能不完整。可以自己把漏掉的補上，或按「重錄」重講一次。';
+    }
+
     return {
       transcript,
       needsManualEntry,
+      interrupted,
       reason: finalReason,
-      notice: needsManualEntry ? fallbackNotice(finalReason) : null,
+      notice,
     };
   }
 
@@ -244,6 +315,10 @@ export function createRecognizer(options = {}) {
     },
     get restarts() {
       return restarts;
+    },
+    /** 辨識中途死掉、重試也救不回來。這一遍的後半段等於沒錄到 */
+    get interrupted() {
+      return interrupted;
     },
     get notice() {
       return supported ? null : fallbackNotice('unsupported');
