@@ -95,7 +95,16 @@ describe('T02 設計樣式基底', () => {
   it('錄音按鈕夠大且放低，單手拇指可及', () => {
     const record = rule('.btn-record');
     expect(parseInt(record.match(/width:\s*(\d+)px/)[1], 10)).toBeGreaterThanOrEqual(120);
-    expect(rule('.record-area')).toMatch(/margin-top:\s*\d+vh/);
+    // 吃掉剩下的高度並置中，落在畫面下半部的中間
+    const area = rule('.record-area');
+    expect(area).toContain('flex: 1 0 auto');
+    expect(area).toContain('justify-content: center');
+    expect(css).toContain('#view-today:not([hidden])');
+  });
+
+  it('今日畫面該隱藏的時候還是要隱藏', () => {
+    // id 選擇器優先度比 .view[hidden] 高，所以必須用 :not([hidden]) 寫
+    expect(css).not.toMatch(/#view-today\s*\{/);
   });
 
   it('三遍比對是上下堆疊，不是左右並排', () => {

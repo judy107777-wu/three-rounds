@@ -164,13 +164,28 @@ body {
   padding: 8px 4px;
 }
 
-/* 錄音按鈕做大且放低：單手拇指可及 */
+/*
+ * 今日練習用直向 flex，讓錄音區可以吃掉上面內容之後剩下的高度。
+ * 用 :not([hidden]) 是因為 id 選擇器的優先度比 .view[hidden] 高，
+ * 直接寫 display:flex 會讓這個畫面在該隱藏的時候還是跑出來。
+ */
+#view-today:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 92px);
+  min-height: calc(100dvh - 92px);
+}
+
+/* 錄音按鈕做大且放低：單手拇指可及。
+   吃掉剩下的高度並置中，等於落在畫面下半部的中間。 */
 .record-area {
-  margin-top: 28vh;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: var(--gap);
+  padding: var(--gap-lg) 0;
 }
 
 .btn-record {
