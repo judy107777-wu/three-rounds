@@ -39,6 +39,18 @@
   <button type="button" class="btn diag-btn" id="t3">測試 3：先辨識再錄音</button>
   <button type="button" class="btn diag-btn" id="stop">提早停止</button>
 
+  <hr>
+
+  <h2 class="section-title">錄音送 Gemini 轉逐字稿</h2>
+  <p class="hint">
+    這兩個測試會把你的<strong>錄音</strong>送到 Gemini。需要金鑰、會用到網路。<br>
+    請講 15 秒左右，<strong>刻意多用「然後」「就是」「那個」</strong>，
+    講一段有專有名詞或數字的內容（那正是現在最容易辨識錯的地方），
+    這樣才比得出來準不準。
+  </p>
+  <button type="button" class="btn diag-btn" id="t4">測試 4：錄音 15 秒 → 直接送 webm</button>
+  <button type="button" class="btn diag-btn" id="t5">測試 5：錄音 15 秒 → 轉成 WAV 再送</button>
+
   <div class="card">
     <div id="log">按上面任一個測試開始。</div>
   </div>
@@ -227,6 +239,174 @@ document.getElementById('clear').onclick = () => {
 };
 
 env();
+window.diagLog = log;
+</script>
+
+<script type="module">
+/*
+ * 測試 4、5：錄音送 Gemini 轉逐字稿。
+ * 目的是一次問清楚三件事：
+ *   1. Gemini 吃不吃 Android 錄出來的 webm（官方文件沒列這個格式）
+ *   2. 實際要等多久
+ *   3. 轉出來到底多準、贅詞有沒有保留
+ * 用 module 是為了直接沿用 APP 的模型設定與金鑰，不要另外寫死一份。
+ */
+import { GEMINI_MODEL, GEMINI_ENDPOINT } from './src/ai-review.js';
+import { getApiKey } from './src/ui-settings.js';
+
+const log = window.diagLog;
+const RECORD_MS = 15000;
+
+const PROMPT = [
+  '請把這段錄音如實轉成繁體中文逐字稿。',
+  '要求：',
+  '1. 一字不改，保留所有口頭禪與語助詞（例如「然後」「就是」「那個」「呢」）。',
+  '2. 保留重複的字、說到一半改口的部分。',
+  '3. 不要修飾、不要精簡、不要分段、不要加標點符號。',
+  '4. 只輸出逐字稿本身，不要任何說明或前言。',
+].join('\n');
+
+function toBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  // 一次轉太多會爆堆疊，分塊處理
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+/** 把錄音解碼、降到 16kHz 單聲道，再包成 WAV */
+async function toWav(blob) {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const decoded = await new AC().decodeAudioData(await blob.arrayBuffer());
+  const rate = 16000;
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * rate), rate);
+  const source = offline.createBufferSource();
+  source.buffer = decoded;
+  source.connect(offline.destination);
+  source.start();
+  const rendered = await offline.startRendering();
+  const samples = rendered.getChannelData(0);
+
+  const bytes = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(bytes);
+  const ascii = (offset, text) => {
+    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  ascii(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  ascii(8, 'WAVE');
+  ascii(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);          // PCM
+  view.setUint16(22, 1, true);          // 單聲道
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ascii(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i += 1) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([bytes], { type: 'audio/wav' });
+}
+
+async function record(ms) {
+  log('要求麥克風權限…');
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const rec = new MediaRecorder(stream);
+  const chunks = [];
+  rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  rec.start();
+  log(`錄音開始，請講話（${ms / 1000} 秒）`);
+  await new Promise((resolve) => {
+    rec.onstop = resolve;
+    setTimeout(() => rec.stop(), ms);
+  });
+  stream.getTracks().forEach((t) => t.stop());
+  const type = rec.mimeType || 'audio/webm';
+  log(`錄音結束，格式 ${type || '（沒回報）'}`);
+  return new Blob(chunks, { type: type.split(';')[0] || 'audio/webm' });
+}
+
+async function transcribe(blob, mimeType) {
+  const key = getApiKey();
+  if (!key) {
+    log('!! 還沒設定 Gemini 金鑰。請先到 APP 的設定頁貼上金鑰。');
+    return;
+  }
+  const base64 = toBase64(await blob.arrayBuffer());
+  log(`音檔 ${(blob.size / 1024).toFixed(0)} KB，編碼後 ${(base64.length / 1024).toFixed(0)} KB`);
+  log(`送出（${mimeType}，模型 ${GEMINI_MODEL}）…`);
+
+  const started = Date.now();
+  let response;
+  try {
+    response = await fetch(GEMINI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [{ text: PROMPT }, { inline_data: { mime_type: mimeType, data: base64 } }],
+        }],
+        generationConfig: { temperature: 0 },
+      }),
+    });
+  } catch (err) {
+    log(`!! 連不上 >>> ${err.name} ${err.message}`);
+    return;
+  }
+  const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    log('!! 回傳不是 JSON');
+  }
+
+  if (!response.ok) {
+    log(`!! 失敗 HTTP ${response.status}｜${body?.error?.message || '（沒有訊息）'}`);
+    log(`耗時 ${elapsed} 秒`);
+    return;
+  }
+
+  const text = (body?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
+  const usage = body?.usageMetadata;
+  log(`成功，耗時 ${elapsed} 秒`);
+  if (usage) {
+    log(`用量：輸入 ${usage.promptTokenCount} tokens，輸出 ${usage.candidatesTokenCount} tokens`);
+  }
+  log(`字數 ${text.replace(/[\s\p{P}]/gu, '').length}`);
+  log('逐字稿如下：');
+  log(text || '（空的）');
+}
+
+async function runAudioTest(name, convert) {
+  log('');
+  log(`══════ ${name} ══════`);
+  try {
+    const raw = await record(RECORD_MS);
+    const sending = convert ? await convert(raw) : raw;
+    if (convert) {
+      log(`轉成 WAV：${(raw.size / 1024).toFixed(0)} KB → ${(sending.size / 1024).toFixed(0)} KB`);
+    }
+    await transcribe(sending, sending.type || 'audio/webm');
+  } catch (err) {
+    log(`!! 出錯 >>> ${err.name} ${err.message}`);
+  }
+}
+
+document.getElementById('t4').onclick = () =>
+  runAudioTest('測試 4：直接送 webm', null);
+
+document.getElementById('t5').onclick = () =>
+  runAudioTest('測試 5：轉成 WAV 再送', toWav);
 </script>
 </body>
 </html>
